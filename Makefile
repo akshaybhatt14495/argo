@@ -179,10 +179,12 @@ cli-image: $(CLI_IMAGE_FILE)
 $(CLI_IMAGE_FILE): dist/argo-$(OUTPUT_IMAGE_OS)-$(OUTPUT_IMAGE_ARCH) argo-server.crt argo-server.key
 	# Create CLI image
 ifeq ($(DEV_IMAGE),true)
+	echo dev_image_true
 	cp dist/argo-$(OUTPUT_IMAGE_OS)-$(OUTPUT_IMAGE_ARCH) argo
 	docker build -t $(IMAGE_NAMESPACE)/argocli:$(VERSION) --target argocli -f Dockerfile.dev --build-arg IMAGE_OS=$(OUTPUT_IMAGE_OS) --build-arg IMAGE_ARCH=$(OUTPUT_IMAGE_ARCH) .
 	rm -f argo
 else
+	echo dev_image_false
 	docker build $(DOCKER_BUILD_OPTS) -t $(IMAGE_NAMESPACE)/argocli:$(VERSION) --target argocli --build-arg IMAGE_OS=$(OUTPUT_IMAGE_OS) --build-arg IMAGE_ARCH=$(OUTPUT_IMAGE_ARCH) .
 endif
 ifeq ($(K3D),true)
@@ -208,7 +210,7 @@ $(CONTROLLER_IMAGE_FILE): dist/workflow-controller-$(OUTPUT_IMAGE_OS)-$(OUTPUT_I
 	# Create controller image
 ifeq ($(DEV_IMAGE),true)
 	cp dist/workflow-controller-$(OUTPUT_IMAGE_OS)-$(OUTPUT_IMAGE_ARCH) workflow-controller
-	docker build -t $(IMAGE_NAMESPACE)/workflow-controller:$(VERSION) --target workflow-controller -f Dockerfile.dev --build-arg IMAGE_OS=$(OUTPUT_IMAGE_OS) --build-arg IMAGE_ARCH=$(OUTPUT_IMAGE_ARCH) .
+	docker build --no-cache -t $(IMAGE_NAMESPACE)/workflow-controller:$(VERSION) --target workflow-controller -f Dockerfile.dev --build-arg IMAGE_OS=$(OUTPUT_IMAGE_OS) --build-arg IMAGE_ARCH=$(OUTPUT_IMAGE_ARCH) .
 	rm -f workflow-controller
 else
 	docker build $(DOCKER_BUILD_OPTS) -t $(IMAGE_NAMESPACE)/workflow-controller:$(VERSION) --target workflow-controller --build-arg IMAGE_OS=$(OUTPUT_IMAGE_OS) --build-arg IMAGE_ARCH=$(OUTPUT_IMAGE_ARCH) .
@@ -233,7 +235,7 @@ $(EXECUTOR_IMAGE_FILE): dist/argoexec-$(OUTPUT_IMAGE_OS)-$(OUTPUT_IMAGE_ARCH)
 	# Create executor image
 ifeq ($(DEV_IMAGE),true)
 	cp dist/argoexec-$(OUTPUT_IMAGE_OS)-$(OUTPUT_IMAGE_ARCH) argoexec
-	docker build -t $(IMAGE_NAMESPACE)/argoexec:$(VERSION) --target argoexec -f Dockerfile.dev --build-arg IMAGE_OS=$(OUTPUT_IMAGE_OS) --build-arg IMAGE_ARCH=$(OUTPUT_IMAGE_ARCH) .
+	docker build --no-cache -t $(IMAGE_NAMESPACE)/argoexec:$(VERSION) --target argoexec -f Dockerfile.dev --build-arg IMAGE_OS=$(OUTPUT_IMAGE_OS) --build-arg IMAGE_ARCH=$(OUTPUT_IMAGE_ARCH) .
 	rm -f argoexec
 else
 	docker build $(DOCKER_BUILD_OPTS) -t $(IMAGE_NAMESPACE)/argoexec:$(VERSION) --target argoexec --build-arg IMAGE_OS=$(OUTPUT_IMAGE_OS) --build-arg IMAGE_ARCH=$(OUTPUT_IMAGE_ARCH) .

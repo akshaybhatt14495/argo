@@ -40,8 +40,11 @@ func NewRootCommand() *cobra.Command {
 		glogLevel                int    // --gloglevel
 		workflowWorkers          int    // --workflow-workers
 		podWorkers               int    // --pod-workers
+		burst                    int    // --burst
+		qps                      float32   // --qps
 		namespaced               bool   // --namespaced
 		managedNamespace         string // --managed-namespace
+
 	)
 
 	var command = cobra.Command{
@@ -57,8 +60,10 @@ func NewRootCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			config.Burst = 30
-			config.QPS = 20.0
+
+			log.Infof("dev v4 log: qps %f, burst %d", qps, burst)
+			config.Burst = burst
+			config.QPS = qps
 
 			namespace, _, err := clientConfig.Namespace()
 			if err != nil {
@@ -104,6 +109,9 @@ func NewRootCommand() *cobra.Command {
 	command.Flags().IntVar(&glogLevel, "gloglevel", 0, "Set the glog logging level")
 	command.Flags().IntVar(&workflowWorkers, "workflow-workers", 32, "Number of workflow workers")
 	command.Flags().IntVar(&podWorkers, "pod-workers", 32, "Number of pod workers")
+	command.Flags().IntVar(&burst, "burst", 30, "brust")
+	command.Flags().Float32Var(&qps, "qps", 20.0, "Qps")
+
 	command.Flags().BoolVar(&namespaced, "namespaced", false, "run workflow-controller as namespaced mode")
 	command.Flags().StringVar(&managedNamespace, "managed-namespace", "", "namespace that workflow-controller watches, default to the installation namespace")
 	return &command

@@ -858,6 +858,8 @@ func (we *WorkflowExecutor) Wait() error {
 		return err
 	}
 	log.Infof("Waiting on main container")
+	log.Infof("Waiting on main container test")
+
 	mainContainerID, err := we.waitMainContainerStart()
 	if err != nil {
 		return err
@@ -907,7 +909,6 @@ func (we *WorkflowExecutor) waitMainContainerStart() (string, error) {
 			}
 			for _, ctrStatus := range pod.Status.ContainerStatuses {
 				if ctrStatus.Name == common.MainContainerName {
-					log.Debug(ctrStatus)
 					if ctrStatus.ContainerID != "" {
 						we.mainContainerID = containerID(ctrStatus.ContainerID)
 						return containerID(ctrStatus.ContainerID), nil

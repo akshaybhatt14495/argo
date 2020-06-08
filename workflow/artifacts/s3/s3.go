@@ -44,7 +44,7 @@ func (s3Driver *S3ArtifactDriver) newS3Client() (argos3.S3Client, error) {
 func (s3Driver *S3ArtifactDriver) Load(inputArtifact *wfv1.Artifact, path string) error {
 	err := wait.ExponentialBackoff(wait.Backoff{Duration: time.Second * 2, Factor: 2.0, Steps: 5, Jitter: 0.1},
 		func() (bool, error) {
-			log.Infof("S3 Load path: %s, key: %s", path, inputArtifact.S3.Key)
+			log.Infof("dev v4: S3 Load path: %s, key: %s", path, inputArtifact.S3.Key)
 			s3cli, err := s3Driver.newS3Client()
 			if err != nil {
 				log.Warnf("Failed to create new S3 client: %v", err)
@@ -106,6 +106,7 @@ func (s3Driver *S3ArtifactDriver) Save(path string, outputArtifact *wfv1.Artifac
 				}
 			}
 			return true, nil
+
 		})
 	return err
 }
