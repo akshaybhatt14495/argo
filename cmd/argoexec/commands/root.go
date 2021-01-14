@@ -4,13 +4,12 @@ import (
 	"encoding/json"
 	"os"
 
+	"github.com/argoproj/pkg/cli"
+	kubecli "github.com/argoproj/pkg/kube/cli"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
-
-	"github.com/argoproj/pkg/cli"
-	kubecli "github.com/argoproj/pkg/kube/cli"
 
 	"github.com/argoproj/argo"
 	"github.com/argoproj/argo/util"
@@ -40,8 +39,12 @@ func init() {
 }
 
 func initConfig() {
+	log.SetFormatter(&log.TextFormatter{
+		TimestampFormat: "2006-01-02T15:04:05.000Z",
+		FullTimestamp:   true,
+	})
 	cli.SetLogLevel(logLevel)
-	cli.SetGLogLevel(glogLevel)
+	cmd.SetGLogLevel(glogLevel)
 }
 
 func NewRootCommand() *cobra.Command {

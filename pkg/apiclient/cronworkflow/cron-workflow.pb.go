@@ -7,14 +7,12 @@ import (
 	context "context"
 	fmt "fmt"
 	v1alpha1 "github.com/argoproj/argo/pkg/apis/workflow/v1alpha1"
-	_ "github.com/gogo/protobuf/gogoproto"
 	proto "github.com/gogo/protobuf/proto"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
 	io "io"
-	_ "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	math "math"
 	math_bits "math/bits"
@@ -268,7 +266,8 @@ func (m *GetCronWorkflowRequest) GetGetOptions() *v1.GetOptions {
 }
 
 type UpdateCronWorkflowRequest struct {
-	Name                 string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// DEPRECATED: This field is ignored.
+	Name                 string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"` // Deprecated: Do not use.
 	Namespace            string                 `protobuf:"bytes,2,opt,name=namespace,proto3" json:"namespace,omitempty"`
 	CronWorkflow         *v1alpha1.CronWorkflow `protobuf:"bytes,3,opt,name=cronWorkflow,proto3" json:"cronWorkflow,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}               `json:"-"`
@@ -309,6 +308,7 @@ func (m *UpdateCronWorkflowRequest) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_UpdateCronWorkflowRequest proto.InternalMessageInfo
 
+// Deprecated: Do not use.
 func (m *UpdateCronWorkflowRequest) GetName() string {
 	if m != nil {
 		return m.Name
@@ -432,6 +432,116 @@ func (m *CronWorkflowDeletedResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_CronWorkflowDeletedResponse proto.InternalMessageInfo
 
+type CronWorkflowSuspendRequest struct {
+	Name                 string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Namespace            string   `protobuf:"bytes,2,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *CronWorkflowSuspendRequest) Reset()         { *m = CronWorkflowSuspendRequest{} }
+func (m *CronWorkflowSuspendRequest) String() string { return proto.CompactTextString(m) }
+func (*CronWorkflowSuspendRequest) ProtoMessage()    {}
+func (*CronWorkflowSuspendRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_257f310938c448f8, []int{7}
+}
+func (m *CronWorkflowSuspendRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *CronWorkflowSuspendRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_CronWorkflowSuspendRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *CronWorkflowSuspendRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CronWorkflowSuspendRequest.Merge(m, src)
+}
+func (m *CronWorkflowSuspendRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *CronWorkflowSuspendRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_CronWorkflowSuspendRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_CronWorkflowSuspendRequest proto.InternalMessageInfo
+
+func (m *CronWorkflowSuspendRequest) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *CronWorkflowSuspendRequest) GetNamespace() string {
+	if m != nil {
+		return m.Namespace
+	}
+	return ""
+}
+
+type CronWorkflowResumeRequest struct {
+	Name                 string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Namespace            string   `protobuf:"bytes,2,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *CronWorkflowResumeRequest) Reset()         { *m = CronWorkflowResumeRequest{} }
+func (m *CronWorkflowResumeRequest) String() string { return proto.CompactTextString(m) }
+func (*CronWorkflowResumeRequest) ProtoMessage()    {}
+func (*CronWorkflowResumeRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_257f310938c448f8, []int{8}
+}
+func (m *CronWorkflowResumeRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *CronWorkflowResumeRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_CronWorkflowResumeRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *CronWorkflowResumeRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CronWorkflowResumeRequest.Merge(m, src)
+}
+func (m *CronWorkflowResumeRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *CronWorkflowResumeRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_CronWorkflowResumeRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_CronWorkflowResumeRequest proto.InternalMessageInfo
+
+func (m *CronWorkflowResumeRequest) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *CronWorkflowResumeRequest) GetNamespace() string {
+	if m != nil {
+		return m.Namespace
+	}
+	return ""
+}
+
 func init() {
 	proto.RegisterType((*LintCronWorkflowRequest)(nil), "cronworkflow.LintCronWorkflowRequest")
 	proto.RegisterType((*CreateCronWorkflowRequest)(nil), "cronworkflow.CreateCronWorkflowRequest")
@@ -440,6 +550,8 @@ func init() {
 	proto.RegisterType((*UpdateCronWorkflowRequest)(nil), "cronworkflow.UpdateCronWorkflowRequest")
 	proto.RegisterType((*DeleteCronWorkflowRequest)(nil), "cronworkflow.DeleteCronWorkflowRequest")
 	proto.RegisterType((*CronWorkflowDeletedResponse)(nil), "cronworkflow.CronWorkflowDeletedResponse")
+	proto.RegisterType((*CronWorkflowSuspendRequest)(nil), "cronworkflow.CronWorkflowSuspendRequest")
+	proto.RegisterType((*CronWorkflowResumeRequest)(nil), "cronworkflow.CronWorkflowResumeRequest")
 }
 
 func init() {
@@ -447,50 +559,54 @@ func init() {
 }
 
 var fileDescriptor_257f310938c448f8 = []byte{
-	// 683 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xcc, 0x96, 0x4f, 0x6b, 0x13, 0x4f,
-	0x18, 0xc7, 0x99, 0xf6, 0xc7, 0x0f, 0x3b, 0xb5, 0xa8, 0x23, 0x68, 0xba, 0xd6, 0x52, 0x86, 0x6a,
-	0xff, 0x68, 0x67, 0x4c, 0xd3, 0x83, 0x78, 0xab, 0xa9, 0xf4, 0x12, 0x50, 0xb6, 0x88, 0xd4, 0xdb,
-	0x64, 0x33, 0xdd, 0xac, 0xd9, 0xcc, 0xac, 0xbb, 0x93, 0x14, 0x91, 0x5e, 0xbc, 0x7b, 0xf2, 0xa8,
-	0x78, 0xf6, 0xe2, 0x1f, 0x44, 0x7c, 0x0d, 0x1e, 0x05, 0xdf, 0x80, 0x04, 0xdf, 0x85, 0x17, 0xd9,
-	0x49, 0x36, 0xfb, 0x27, 0x59, 0xba, 0xda, 0x08, 0xde, 0x66, 0xb2, 0xf3, 0x7c, 0x9f, 0xcf, 0x3c,
-	0xcf, 0xc3, 0x37, 0x03, 0x89, 0xd7, 0xb2, 0x29, 0xf3, 0x1c, 0xcb, 0x75, 0xb8, 0x50, 0xd4, 0xf2,
-	0xa5, 0x38, 0x94, 0x7e, 0xeb, 0xc0, 0x95, 0x87, 0x7a, 0xb3, 0x11, 0xed, 0x88, 0xe7, 0x4b, 0x25,
-	0xd1, 0xe9, 0xe4, 0x09, 0x63, 0xc3, 0x76, 0x54, 0xb3, 0x53, 0x27, 0x96, 0x6c, 0x53, 0x5b, 0xda,
-	0x92, 0xea, 0x43, 0xf5, 0xce, 0x81, 0xde, 0xe9, 0x8d, 0x5e, 0xf5, 0x83, 0x8d, 0x05, 0x5b, 0x4a,
-	0xdb, 0xe5, 0x61, 0x3e, 0xca, 0x84, 0x90, 0x8a, 0x29, 0x47, 0x8a, 0x60, 0xf0, 0x75, 0xab, 0x75,
-	0x33, 0x20, 0x8e, 0x0c, 0xbf, 0xb6, 0x99, 0xd5, 0x74, 0x04, 0xf7, 0x9f, 0xd0, 0x01, 0x5e, 0x40,
-	0xdb, 0x5c, 0x31, 0xda, 0x2d, 0x53, 0x9b, 0x0b, 0xee, 0x33, 0xc5, 0x1b, 0x83, 0xa8, 0x6a, 0x02,
-	0x81, 0xf9, 0x3a, 0xe9, 0x23, 0xbd, 0x88, 0x43, 0x87, 0x17, 0xea, 0x96, 0x99, 0xeb, 0x35, 0xd9,
-	0xa8, 0x08, 0x8e, 0x53, 0x53, 0x4b, 0xfa, 0x7c, 0x4c, 0x22, 0xfc, 0x1a, 0xc0, 0x8b, 0x35, 0x47,
-	0xa8, 0xaa, 0x2f, 0xc5, 0x83, 0x81, 0xa2, 0xc9, 0x1f, 0x77, 0x78, 0xa0, 0xd0, 0x02, 0x9c, 0x11,
-	0xac, 0xcd, 0x03, 0x8f, 0x59, 0xbc, 0x04, 0x96, 0xc0, 0xea, 0x8c, 0x19, 0xff, 0x80, 0x38, 0xd4,
-	0x55, 0x8b, 0x82, 0x4a, 0x53, 0x4b, 0x60, 0x75, 0x76, 0x73, 0x9b, 0xc4, 0xe4, 0x24, 0x22, 0xd7,
-	0x8b, 0xb0, 0x27, 0x24, 0x24, 0x27, 0xc3, 0xe2, 0x47, 0xe4, 0x24, 0x95, 0x3d, 0x25, 0x8b, 0x7f,
-	0x02, 0x38, 0x5f, 0xf5, 0x39, 0x53, 0xfc, 0x5f, 0x45, 0x44, 0xfb, 0x70, 0xce, 0xd2, 0x84, 0x77,
-	0x3d, 0xdd, 0xf9, 0xd2, 0xb4, 0xce, 0x53, 0x21, 0xfd, 0xfa, 0x93, 0x64, 0xeb, 0xe3, 0x14, 0x61,
-	0xeb, 0x49, 0x37, 0x14, 0x4e, 0x84, 0x9a, 0x69, 0x25, 0xfc, 0x1c, 0xc0, 0x52, 0xcd, 0x09, 0x52,
-	0xed, 0x09, 0x8a, 0x5d, 0x7e, 0x0f, 0xce, 0xba, 0x4e, 0xa0, 0x22, 0xa6, 0xfe, 0xdd, 0xcb, 0xc5,
-	0x98, 0x6a, 0x71, 0xa0, 0x99, 0x54, 0xc1, 0xaf, 0x00, 0xbc, 0xb0, 0xcb, 0xc7, 0x4e, 0x0b, 0x82,
-	0xff, 0x85, 0xc9, 0x07, 0x20, 0x7a, 0x9d, 0x26, 0x9c, 0xca, 0x12, 0xde, 0x83, 0xd0, 0xe6, 0x2a,
-	0x5d, 0xb4, 0x1b, 0xc5, 0x00, 0x77, 0x87, 0x71, 0x66, 0x42, 0x03, 0x7f, 0x02, 0x70, 0xfe, 0xbe,
-	0xd7, 0xc8, 0x19, 0x96, 0xdf, 0x27, 0xcc, 0x0e, 0xd0, 0xf4, 0xdf, 0x99, 0xf1, 0x37, 0x00, 0xce,
-	0xef, 0x70, 0x97, 0x4f, 0x0a, 0x7b, 0x1f, 0xce, 0x35, 0xb4, 0xdc, 0x1f, 0x0d, 0xe4, 0x4e, 0x32,
-	0xd4, 0x4c, 0x2b, 0xe1, 0xcb, 0xf0, 0x52, 0x92, 0xb1, 0x7f, 0xb6, 0x61, 0xf2, 0xc0, 0x93, 0x22,
-	0xe0, 0x9b, 0x1f, 0x4f, 0xc1, 0xf3, 0xc9, 0xef, 0x7b, 0xdc, 0xef, 0x3a, 0x16, 0x47, 0x1f, 0x00,
-	0x3c, 0x9b, 0xb5, 0x19, 0x74, 0x85, 0x24, 0x6d, 0x97, 0xe4, 0xd8, 0x90, 0x71, 0xf2, 0x72, 0xe3,
-	0xcd, 0x67, 0xdf, 0x7e, 0xbc, 0x98, 0xba, 0x8e, 0x57, 0xb4, 0x17, 0x76, 0xcb, 0xe9, 0x3f, 0x81,
-	0x80, 0x3e, 0x1d, 0xd6, 0xee, 0x88, 0xba, 0x8e, 0x50, 0xb7, 0xc0, 0x3a, 0x7a, 0x0f, 0x20, 0x1a,
-	0x35, 0x1e, 0xb4, 0x92, 0x86, 0xce, 0xb5, 0xa6, 0x49, 0x60, 0x6f, 0x68, 0xec, 0x15, 0x8c, 0x8f,
-	0xc7, 0x0e, 0x89, 0xdf, 0x01, 0x78, 0x6e, 0xc4, 0x2c, 0xd0, 0xd5, 0x6c, 0x95, 0xc7, 0xbb, 0x89,
-	0x71, 0xe7, 0xc4, 0xbc, 0xa1, 0x34, 0x5e, 0xd7, 0xcc, 0xcb, 0xa8, 0x00, 0x33, 0x7a, 0x0b, 0xe0,
-	0x99, 0x8c, 0x9b, 0xa0, 0xe5, 0x34, 0xee, 0x78, 0xb3, 0x99, 0x44, 0x71, 0xcb, 0x1a, 0xf4, 0x1a,
-	0x5a, 0x2b, 0x30, 0x13, 0x7a, 0x7d, 0x84, 0x3e, 0x03, 0x88, 0x46, 0xed, 0x25, 0x3b, 0x12, 0xb9,
-	0x06, 0x34, 0x09, 0xea, 0x2d, 0x4d, 0x4d, 0x8c, 0xe2, 0xd4, 0xe1, 0x64, 0xbc, 0x04, 0x10, 0x8d,
-	0x1a, 0x4c, 0x16, 0x3c, 0xd7, 0x82, 0x8c, 0xb5, 0xec, 0xd0, 0xe7, 0x3a, 0x40, 0x54, 0xd6, 0xf5,
-	0xe2, 0x80, 0xb7, 0xb7, 0xbf, 0xf4, 0x16, 0xc1, 0xd7, 0xde, 0x22, 0xf8, 0xde, 0x5b, 0x04, 0x0f,
-	0x2b, 0xc7, 0x3d, 0x7d, 0xc6, 0x3c, 0xea, 0xea, 0xff, 0xeb, 0xd7, 0x4c, 0xe5, 0x57, 0x00, 0x00,
-	0x00, 0xff, 0xff, 0x4d, 0x5f, 0x24, 0x0b, 0xf9, 0x09, 0x00, 0x00,
+	// 752 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xcc, 0x96, 0xcd, 0x4f, 0xd4, 0x4e,
+	0x18, 0xc7, 0x33, 0xcb, 0x2f, 0xbf, 0x84, 0x07, 0x89, 0x3a, 0x24, 0xb8, 0x54, 0x24, 0xa4, 0x41,
+	0x81, 0x55, 0xa6, 0x2c, 0xa0, 0x31, 0xe8, 0x85, 0x17, 0xc3, 0x05, 0x5f, 0xb2, 0xc4, 0x18, 0xbc,
+	0x95, 0xee, 0x58, 0x2a, 0xdd, 0x99, 0xda, 0x99, 0x5d, 0x62, 0x0c, 0x17, 0xef, 0x9e, 0x3c, 0x6a,
+	0x3c, 0x7b, 0xf1, 0xe5, 0xa2, 0xf1, 0x62, 0xe2, 0xd1, 0xa3, 0x89, 0xff, 0x80, 0x21, 0xfe, 0x17,
+	0x5e, 0x4c, 0x67, 0xdf, 0x3a, 0xdd, 0xad, 0x14, 0x58, 0x13, 0x6f, 0xd3, 0xed, 0x3c, 0xcf, 0x7c,
+	0x9e, 0xef, 0xf3, 0xec, 0xb7, 0x03, 0x24, 0xd8, 0x71, 0x2d, 0x3b, 0xf0, 0x1c, 0xdf, 0xa3, 0x4c,
+	0x5a, 0x4e, 0xc8, 0xd9, 0x2e, 0x0f, 0x77, 0x1e, 0xf8, 0x7c, 0x57, 0x3d, 0xcc, 0x34, 0x9f, 0x48,
+	0x10, 0x72, 0xc9, 0xf1, 0x89, 0xf8, 0x0e, 0x63, 0xd4, 0xe5, 0xdc, 0xf5, 0x69, 0x94, 0xc0, 0xb2,
+	0x19, 0xe3, 0xd2, 0x96, 0x1e, 0x67, 0xa2, 0xbe, 0xd7, 0x58, 0xd8, 0xb9, 0x2a, 0x88, 0xc7, 0xa3,
+	0xb7, 0x15, 0xdb, 0xd9, 0xf6, 0x18, 0x0d, 0x1f, 0x5b, 0x8d, 0xf3, 0x84, 0x55, 0xa1, 0xd2, 0xb6,
+	0x6a, 0x45, 0xcb, 0xa5, 0x8c, 0x86, 0xb6, 0xa4, 0xe5, 0x46, 0xd4, 0x8a, 0xeb, 0xc9, 0xed, 0xea,
+	0x16, 0x71, 0x78, 0xc5, 0xb2, 0x43, 0x97, 0x07, 0x21, 0x7f, 0xa8, 0x16, 0xed, 0xd0, 0x16, 0x61,
+	0xad, 0x68, 0xfb, 0xc1, 0xb6, 0xdd, 0x91, 0xc4, 0x7c, 0x85, 0xe0, 0xcc, 0xba, 0xc7, 0xe4, 0x4a,
+	0xc8, 0xd9, 0xbd, 0xc6, 0xee, 0x12, 0x7d, 0x54, 0xa5, 0x42, 0xe2, 0x51, 0xe8, 0x67, 0x76, 0x85,
+	0x8a, 0xc0, 0x76, 0x68, 0x1e, 0x8d, 0xa3, 0xa9, 0xfe, 0x52, 0xfb, 0x07, 0x4c, 0x41, 0x95, 0xd8,
+	0x0c, 0xca, 0xe7, 0xc6, 0xd1, 0xd4, 0xc0, 0xdc, 0x12, 0x69, 0x53, 0x91, 0x26, 0x95, 0x5a, 0x44,
+	0x02, 0x92, 0x88, 0x8a, 0xb4, 0x94, 0x6a, 0x52, 0x11, 0xed, 0x74, 0x2d, 0xad, 0xf9, 0x0b, 0xc1,
+	0xc8, 0x4a, 0x48, 0x6d, 0x49, 0xff, 0x55, 0x44, 0xbc, 0x09, 0x83, 0x8e, 0x22, 0xbc, 0x1d, 0xa8,
+	0xae, 0xe6, 0xfb, 0xd4, 0x39, 0xf3, 0xa4, 0xde, 0x56, 0x12, 0x6f, 0x6b, 0xfb, 0x88, 0xa8, 0xad,
+	0xa4, 0x16, 0x25, 0x8e, 0x85, 0x96, 0xf4, 0x4c, 0xe6, 0x33, 0x04, 0xf9, 0x75, 0x4f, 0x68, 0xed,
+	0x11, 0xd9, 0x8a, 0xdf, 0x80, 0x01, 0xdf, 0x13, 0xb2, 0xc9, 0x54, 0xaf, 0xbd, 0x98, 0x8d, 0x69,
+	0xbd, 0x1d, 0x58, 0x8a, 0x67, 0x31, 0x5f, 0x22, 0x18, 0x5e, 0xa3, 0x5d, 0xa7, 0x05, 0xc3, 0x7f,
+	0xd1, 0xe1, 0x0d, 0x10, 0xb5, 0xd6, 0x09, 0x73, 0x49, 0xc2, 0x3b, 0x00, 0x2e, 0x95, 0xba, 0x68,
+	0xb3, 0xd9, 0x00, 0xd7, 0x5a, 0x71, 0xa5, 0x58, 0x0e, 0xf3, 0x13, 0x82, 0x91, 0xbb, 0x41, 0x39,
+	0x65, 0x58, 0x86, 0xe3, 0x84, 0xcb, 0xb9, 0x3c, 0xca, 0x44, 0x99, 0x1c, 0xa2, 0xbe, 0xbf, 0x33,
+	0xe7, 0xaf, 0x11, 0x8c, 0xac, 0x52, 0x9f, 0x76, 0x47, 0x3f, 0xbc, 0xb8, 0x9b, 0x30, 0x58, 0x56,
+	0xe9, 0x8e, 0x34, 0x94, 0xab, 0xf1, 0xd0, 0x92, 0x9e, 0xc9, 0x3c, 0x07, 0x67, 0xe3, 0x8c, 0xf5,
+	0xbd, 0xe5, 0x12, 0x15, 0x01, 0x67, 0x82, 0x9a, 0xb7, 0xc0, 0x88, 0xbf, 0xde, 0xa8, 0x8a, 0x80,
+	0xb2, 0xf2, 0x91, 0x2b, 0x31, 0x6f, 0x46, 0x06, 0x10, 0x97, 0x44, 0x54, 0x2b, 0xf4, 0xc8, 0xe9,
+	0xe6, 0x3e, 0x0c, 0xc0, 0x90, 0xc6, 0x47, 0xc3, 0x9a, 0xe7, 0x50, 0xfc, 0x1e, 0xc1, 0xa9, 0xa4,
+	0x13, 0xe2, 0xf3, 0x24, 0x6e, 0xe3, 0x24, 0xc5, 0x29, 0x8d, 0xe3, 0x4f, 0x83, 0x39, 0xf7, 0xf4,
+	0xfb, 0xcf, 0xe7, 0xb9, 0x4b, 0xe6, 0xa4, 0xfa, 0x46, 0xd4, 0x8a, 0xfa, 0x47, 0x45, 0x58, 0x4f,
+	0x5a, 0x15, 0xec, 0x59, 0xbe, 0xc7, 0xe4, 0x22, 0x2a, 0xe0, 0x77, 0x08, 0x70, 0xa7, 0x37, 0xe2,
+	0x49, 0x1d, 0x3a, 0xd5, 0x3d, 0x7b, 0x81, 0x3d, 0xa3, 0xb0, 0x27, 0x4d, 0xf3, 0x60, 0xec, 0x88,
+	0xf8, 0x2d, 0x82, 0xd3, 0x1d, 0x7e, 0x86, 0x2f, 0x24, 0x55, 0xee, 0x6e, 0x78, 0xc6, 0x8d, 0x63,
+	0xf3, 0x46, 0xa9, 0xcd, 0x82, 0x62, 0x9e, 0xc0, 0x19, 0x98, 0xf1, 0x1b, 0x04, 0x27, 0x13, 0x86,
+	0x87, 0x27, 0x74, 0xdc, 0xee, 0x7e, 0xd8, 0x0b, 0x71, 0x8b, 0x0a, 0xf4, 0x22, 0x9e, 0xce, 0x30,
+	0x13, 0x6a, 0xbd, 0x87, 0x3f, 0x22, 0xc0, 0x9d, 0x0e, 0x98, 0x1c, 0x89, 0x54, 0x8f, 0xec, 0x05,
+	0xf5, 0x82, 0xa2, 0x26, 0x46, 0x76, 0xea, 0x68, 0x32, 0x5e, 0x20, 0xc0, 0x9d, 0xfe, 0x97, 0x04,
+	0x4f, 0x75, 0x48, 0x63, 0x3a, 0x39, 0xf4, 0xe9, 0x06, 0xd5, 0x90, 0xb5, 0x70, 0x08, 0x59, 0x3f,
+	0x23, 0xc0, 0x75, 0xe3, 0xf9, 0xf3, 0x3f, 0x2d, 0xc5, 0xa6, 0x7a, 0x21, 0xeb, 0x35, 0x45, 0x7d,
+	0xd9, 0x98, 0xcd, 0x4c, 0x6d, 0x85, 0x8a, 0x21, 0x52, 0xf7, 0x0b, 0x82, 0xa1, 0x86, 0x11, 0x6b,
+	0x05, 0x4c, 0xa5, 0x17, 0xa0, 0xfb, 0x76, 0x2f, 0x2a, 0xb8, 0xae, 0x2a, 0xb8, 0x62, 0x14, 0xb3,
+	0x57, 0x20, 0xea, 0x10, 0x8b, 0xa8, 0xb0, 0xbc, 0xf4, 0x75, 0x7f, 0x0c, 0x7d, 0xdb, 0x1f, 0x43,
+	0x3f, 0xf6, 0xc7, 0xd0, 0xfd, 0xf9, 0x83, 0x2e, 0xbf, 0x5d, 0xee, 0xe9, 0x5b, 0xff, 0xab, 0x3b,
+	0xef, 0xfc, 0xef, 0x00, 0x00, 0x00, 0xff, 0xff, 0x34, 0x33, 0x8d, 0x2b, 0xcc, 0x0b, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -511,6 +627,8 @@ type CronWorkflowServiceClient interface {
 	GetCronWorkflow(ctx context.Context, in *GetCronWorkflowRequest, opts ...grpc.CallOption) (*v1alpha1.CronWorkflow, error)
 	UpdateCronWorkflow(ctx context.Context, in *UpdateCronWorkflowRequest, opts ...grpc.CallOption) (*v1alpha1.CronWorkflow, error)
 	DeleteCronWorkflow(ctx context.Context, in *DeleteCronWorkflowRequest, opts ...grpc.CallOption) (*CronWorkflowDeletedResponse, error)
+	ResumeCronWorkflow(ctx context.Context, in *CronWorkflowResumeRequest, opts ...grpc.CallOption) (*v1alpha1.CronWorkflow, error)
+	SuspendCronWorkflow(ctx context.Context, in *CronWorkflowSuspendRequest, opts ...grpc.CallOption) (*v1alpha1.CronWorkflow, error)
 }
 
 type cronWorkflowServiceClient struct {
@@ -575,6 +693,24 @@ func (c *cronWorkflowServiceClient) DeleteCronWorkflow(ctx context.Context, in *
 	return out, nil
 }
 
+func (c *cronWorkflowServiceClient) ResumeCronWorkflow(ctx context.Context, in *CronWorkflowResumeRequest, opts ...grpc.CallOption) (*v1alpha1.CronWorkflow, error) {
+	out := new(v1alpha1.CronWorkflow)
+	err := c.cc.Invoke(ctx, "/cronworkflow.CronWorkflowService/ResumeCronWorkflow", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *cronWorkflowServiceClient) SuspendCronWorkflow(ctx context.Context, in *CronWorkflowSuspendRequest, opts ...grpc.CallOption) (*v1alpha1.CronWorkflow, error) {
+	out := new(v1alpha1.CronWorkflow)
+	err := c.cc.Invoke(ctx, "/cronworkflow.CronWorkflowService/SuspendCronWorkflow", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CronWorkflowServiceServer is the server API for CronWorkflowService service.
 type CronWorkflowServiceServer interface {
 	LintCronWorkflow(context.Context, *LintCronWorkflowRequest) (*v1alpha1.CronWorkflow, error)
@@ -583,6 +719,8 @@ type CronWorkflowServiceServer interface {
 	GetCronWorkflow(context.Context, *GetCronWorkflowRequest) (*v1alpha1.CronWorkflow, error)
 	UpdateCronWorkflow(context.Context, *UpdateCronWorkflowRequest) (*v1alpha1.CronWorkflow, error)
 	DeleteCronWorkflow(context.Context, *DeleteCronWorkflowRequest) (*CronWorkflowDeletedResponse, error)
+	ResumeCronWorkflow(context.Context, *CronWorkflowResumeRequest) (*v1alpha1.CronWorkflow, error)
+	SuspendCronWorkflow(context.Context, *CronWorkflowSuspendRequest) (*v1alpha1.CronWorkflow, error)
 }
 
 // UnimplementedCronWorkflowServiceServer can be embedded to have forward compatible implementations.
@@ -606,6 +744,12 @@ func (*UnimplementedCronWorkflowServiceServer) UpdateCronWorkflow(ctx context.Co
 }
 func (*UnimplementedCronWorkflowServiceServer) DeleteCronWorkflow(ctx context.Context, req *DeleteCronWorkflowRequest) (*CronWorkflowDeletedResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteCronWorkflow not implemented")
+}
+func (*UnimplementedCronWorkflowServiceServer) ResumeCronWorkflow(ctx context.Context, req *CronWorkflowResumeRequest) (*v1alpha1.CronWorkflow, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ResumeCronWorkflow not implemented")
+}
+func (*UnimplementedCronWorkflowServiceServer) SuspendCronWorkflow(ctx context.Context, req *CronWorkflowSuspendRequest) (*v1alpha1.CronWorkflow, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SuspendCronWorkflow not implemented")
 }
 
 func RegisterCronWorkflowServiceServer(s *grpc.Server, srv CronWorkflowServiceServer) {
@@ -720,6 +864,42 @@ func _CronWorkflowService_DeleteCronWorkflow_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CronWorkflowService_ResumeCronWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CronWorkflowResumeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CronWorkflowServiceServer).ResumeCronWorkflow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cronworkflow.CronWorkflowService/ResumeCronWorkflow",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CronWorkflowServiceServer).ResumeCronWorkflow(ctx, req.(*CronWorkflowResumeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CronWorkflowService_SuspendCronWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CronWorkflowSuspendRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CronWorkflowServiceServer).SuspendCronWorkflow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cronworkflow.CronWorkflowService/SuspendCronWorkflow",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CronWorkflowServiceServer).SuspendCronWorkflow(ctx, req.(*CronWorkflowSuspendRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _CronWorkflowService_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "cronworkflow.CronWorkflowService",
 	HandlerType: (*CronWorkflowServiceServer)(nil),
@@ -747,6 +927,14 @@ var _CronWorkflowService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteCronWorkflow",
 			Handler:    _CronWorkflowService_DeleteCronWorkflow_Handler,
+		},
+		{
+			MethodName: "ResumeCronWorkflow",
+			Handler:    _CronWorkflowService_ResumeCronWorkflow_Handler,
+		},
+		{
+			MethodName: "SuspendCronWorkflow",
+			Handler:    _CronWorkflowService_SuspendCronWorkflow_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -1089,6 +1277,88 @@ func (m *CronWorkflowDeletedResponse) MarshalToSizedBuffer(dAtA []byte) (int, er
 	return len(dAtA) - i, nil
 }
 
+func (m *CronWorkflowSuspendRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *CronWorkflowSuspendRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *CronWorkflowSuspendRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.Namespace) > 0 {
+		i -= len(m.Namespace)
+		copy(dAtA[i:], m.Namespace)
+		i = encodeVarintCronWorkflow(dAtA, i, uint64(len(m.Namespace)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Name) > 0 {
+		i -= len(m.Name)
+		copy(dAtA[i:], m.Name)
+		i = encodeVarintCronWorkflow(dAtA, i, uint64(len(m.Name)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *CronWorkflowResumeRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *CronWorkflowResumeRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *CronWorkflowResumeRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.Namespace) > 0 {
+		i -= len(m.Namespace)
+		copy(dAtA[i:], m.Namespace)
+		i = encodeVarintCronWorkflow(dAtA, i, uint64(len(m.Namespace)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Name) > 0 {
+		i -= len(m.Name)
+		copy(dAtA[i:], m.Name)
+		i = encodeVarintCronWorkflow(dAtA, i, uint64(len(m.Name)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
 func encodeVarintCronWorkflow(dAtA []byte, offset int, v uint64) int {
 	offset -= sovCronWorkflow(v)
 	base := offset
@@ -1242,6 +1512,46 @@ func (m *CronWorkflowDeletedResponse) Size() (n int) {
 	}
 	var l int
 	_ = l
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *CronWorkflowSuspendRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Name)
+	if l > 0 {
+		n += 1 + l + sovCronWorkflow(uint64(l))
+	}
+	l = len(m.Namespace)
+	if l > 0 {
+		n += 1 + l + sovCronWorkflow(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *CronWorkflowResumeRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Name)
+	if l > 0 {
+		n += 1 + l + sovCronWorkflow(uint64(l))
+	}
+	l = len(m.Namespace)
+	if l > 0 {
+		n += 1 + l + sovCronWorkflow(uint64(l))
+	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -2147,6 +2457,242 @@ func (m *CronWorkflowDeletedResponse) Unmarshal(dAtA []byte) error {
 			return fmt.Errorf("proto: CronWorkflowDeletedResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipCronWorkflow(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthCronWorkflow
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthCronWorkflow
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *CronWorkflowSuspendRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowCronWorkflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: CronWorkflowSuspendRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: CronWorkflowSuspendRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCronWorkflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthCronWorkflow
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthCronWorkflow
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Name = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Namespace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCronWorkflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthCronWorkflow
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthCronWorkflow
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Namespace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipCronWorkflow(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthCronWorkflow
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthCronWorkflow
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *CronWorkflowResumeRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowCronWorkflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: CronWorkflowResumeRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: CronWorkflowResumeRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCronWorkflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthCronWorkflow
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthCronWorkflow
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Name = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Namespace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCronWorkflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthCronWorkflow
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthCronWorkflow
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Namespace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipCronWorkflow(dAtA[iNdEx:])

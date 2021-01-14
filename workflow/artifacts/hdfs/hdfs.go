@@ -1,6 +1,7 @@
 package hdfs
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -72,19 +73,19 @@ func ValidateArtifact(errPrefix string, art *wfv1.HDFSArtifact) error {
 }
 
 // CreateDriver constructs ArtifactDriver
-func CreateDriver(ci resource.Interface, art *wfv1.HDFSArtifact) (*ArtifactDriver, error) {
+func CreateDriver(ctx context.Context, ci resource.Interface, art *wfv1.HDFSArtifact) (*ArtifactDriver, error) {
 	var krbConfig string
 	var krbOptions *KrbOptions
 	var err error
 
 	if art.KrbConfigConfigMap != nil && art.KrbConfigConfigMap.Name != "" {
-		krbConfig, err = ci.GetConfigMapKey(art.KrbConfigConfigMap.Name, art.KrbConfigConfigMap.Key)
+		krbConfig, err = ci.GetConfigMapKey(ctx, art.KrbConfigConfigMap.Name, art.KrbConfigConfigMap.Key)
 		if err != nil {
 			return nil, err
 		}
 	}
 	if art.KrbCCacheSecret != nil && art.KrbCCacheSecret.Name != "" {
-		bytes, err := ci.GetSecret(art.KrbCCacheSecret.Name, art.KrbCCacheSecret.Key)
+		bytes, err := ci.GetSecret(ctx, art.KrbCCacheSecret.Name, art.KrbCCacheSecret.Key)
 		if err != nil {
 			return nil, err
 		}
@@ -101,7 +102,7 @@ func CreateDriver(ci resource.Interface, art *wfv1.HDFSArtifact) (*ArtifactDrive
 		}
 	}
 	if art.KrbKeytabSecret != nil && art.KrbKeytabSecret.Name != "" {
-		bytes, err := ci.GetSecret(art.KrbKeytabSecret.Name, art.KrbKeytabSecret.Key)
+		bytes, err := ci.GetSecret(ctx, art.KrbKeytabSecret.Name, art.KrbKeytabSecret.Key)
 		if err != nil {
 			return nil, err
 		}
@@ -131,7 +132,7 @@ func CreateDriver(ci resource.Interface, art *wfv1.HDFSArtifact) (*ArtifactDrive
 }
 
 // Load downloads artifacts from HDFS compliant storage
-func (driver *ArtifactDriver) Load(inputArtifact *wfv1.Artifact, path string) error {
+func (driver *ArtifactDriver) Load(_ *wfv1.Artifact, path string) error {
 	hdfscli, err := createHDFSClient(driver.Addresses, driver.HDFSUser, driver.KrbOptions)
 	if err != nil {
 		return err
@@ -169,7 +170,14 @@ func (driver *ArtifactDriver) Load(inputArtifact *wfv1.Artifact, path string) er
 		}
 	}
 
-	return hdfscli.CopyToLocal(driver.Path, path)
+	err = hdfscli.CopyToLocal(driver.Path, path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errors.New(errors.CodeNotFound, err.Error())
+		}
+		return err
+	}
+	return nil
 }
 
 // Save saves an artifact to HDFS compliant storage

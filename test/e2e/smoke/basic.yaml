@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
-  name: basic
+  generateName: basic-
   labels:
     argo-e2e: true
 spec:
@@ -9,6 +9,5 @@ spec:
   templates:
     - name: run-workflow
       container:
-        image: cowsay:v1
-        command: [cowsay, ":) Hello Argo!"]
-        imagePullPolicy: IfNotPresent
+        image: argoproj/argosay:v2
+        args: [echo, ":) Hello Argo!"]

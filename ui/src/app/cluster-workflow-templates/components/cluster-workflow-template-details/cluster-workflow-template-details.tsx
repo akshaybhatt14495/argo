@@ -5,15 +5,18 @@ import {RouteComponentProps} from 'react-router';
 import * as models from '../../../../models';
 import {uiUrl} from '../../../shared/base';
 import {BasePage} from '../../../shared/components/base-page';
+import {ErrorNotice} from '../../../shared/components/error-notice';
 import {Loading} from '../../../shared/components/loading';
-import {ResourceSubmit} from '../../../shared/components/resource-submit';
 import {Consumer} from '../../../shared/context';
 import {services} from '../../../shared/services';
+import {Utils} from '../../../shared/utils';
+import {SubmitWorkflowPanel} from '../../../workflows/components/submit-workflow-panel';
 import {ClusterWorkflowTemplateSummaryPanel} from '../cluster-workflow-template-summary-panel';
 
 require('../../../workflows/components/workflow-details/workflow-details.scss');
 
 interface State {
+    namespace?: string;
     template?: models.ClusterWorkflowTemplate;
     error?: Error;
 }
@@ -39,16 +42,13 @@ export class ClusterWorkflowTemplateDetails extends BasePage<RouteComponentProps
     public componentDidMount(): void {
         services.clusterWorkflowTemplate
             .get(this.name)
-            .then(template => {
-                this.setState({template});
-            })
+            .then(template => this.setState({error: null, template}))
+            .then(() => services.info.getInfo())
+            .then(info => this.setState({namespace: info.managedNamespace || Utils.getCurrentNamespace() || 'default'}))
             .catch(error => this.setState({error}));
     }
 
     public render() {
-        if (this.state.error !== undefined) {
-            throw this.state.error;
-        }
         return (
             <Consumer>
                 {ctx => (
@@ -82,14 +82,13 @@ export class ClusterWorkflowTemplateDetails extends BasePage<RouteComponentProps
                         </div>
                         {this.state.template && (
                             <SlidingPanel isShown={this.sidePanel !== null} onClose={() => (this.sidePanel = null)}>
-                                <ResourceSubmit<models.Workflow>
-                                    resourceName={'Workflow'}
-                                    defaultResource={this.getWorkflow(this.state.template)}
-                                    onSubmit={wfValue => {
-                                        return services.workflows
-                                            .create(wfValue, wfValue.metadata.namespace)
-                                            .then(workflow => ctx.navigation.goto(uiUrl(`workflows/${workflow.metadata.namespace}/${workflow.metadata.name}`)));
-                                    }}
+                                <SubmitWorkflowPanel
+                                    kind='ClusterWorkflowTemplate'
+                                    namespace={this.state.namespace}
+                                    name={this.state.template.metadata.name}
+                                    entrypoint={this.state.template.spec.entrypoint}
+                                    entrypoints={(this.state.template.spec.templates || []).map(t => t.name)}
+                                    parameters={this.state.template.spec.arguments.parameters || []}
                                 />
                             </SlidingPanel>
                         )}
@@ -100,10 +99,13 @@ export class ClusterWorkflowTemplateDetails extends BasePage<RouteComponentProps
     }
 
     private renderClusterWorkflowTemplate() {
+        if (this.state.error) {
+            return <ErrorNotice error={this.state.error} />;
+        }
         if (!this.state.template) {
             return <Loading />;
         }
-        return <ClusterWorkflowTemplateSummaryPanel template={this.state.template} onChange={template => this.setState({template})} onError={error => this.setState({error})} />;
+        return <ClusterWorkflowTemplateSummaryPanel template={this.state.template} onChange={template => this.setState({template})} />;
     }
 
     private deleteClusterWorkflowTemplate() {
@@ -121,25 +123,5 @@ export class ClusterWorkflowTemplateDetails extends BasePage<RouteComponentProps
             .then(() => {
                 document.location.href = uiUrl('cluster-workflow-templates');
             });
-    }
-
-    private getWorkflow(template: models.ClusterWorkflowTemplate): models.Workflow {
-        return {
-            metadata: {
-                generateName: template.metadata.name + '-',
-                namespace: '<enter the namespace>'
-            },
-            spec: {
-                entrypoint: template.spec.templates[0].name,
-                templates: template.spec.templates.map(t => ({
-                    name: t.name,
-                    templateRef: {
-                        name: template.metadata.name,
-                        template: t.name,
-                        clusterScope: true
-                    }
-                }))
-            }
-        };
     }
 }

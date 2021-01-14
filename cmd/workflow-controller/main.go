@@ -3,24 +3,27 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/argoproj/pkg/cli"
+	"github.com/argoproj/pkg/errors"
 	kubecli "github.com/argoproj/pkg/kube/cli"
 	"github.com/argoproj/pkg/stats"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/kubernetes"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/azure"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
+
+	// load authentication plugin for obtaining credentials from cloud providers.
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/tools/clientcmd"
 
 	wfclientset "github.com/argoproj/argo/pkg/client/clientset/versioned"
 	cmdutil "github.com/argoproj/argo/util/cmd"
 	"github.com/argoproj/argo/workflow/controller"
+	"github.com/argoproj/argo/workflow/metrics"
 )
 
 const (
@@ -39,9 +42,11 @@ func NewRootCommand() *cobra.Command {
 		logLevel                 string // --loglevel
 		glogLevel                int    // --gloglevel
 		workflowWorkers          int    // --workflow-workers
+		workflowTTLWorkers       int    // --workflow-ttl-workers
 		podWorkers               int    // --pod-workers
-		burst                    int    // --burst
-		qps                      float32   // --qps
+		podCleanupWorkers        int    // --pod-cleanup-workers
+		burst                    int
+		qps                      float32
 		namespaced               bool   // --namespaced
 		managedNamespace         string // --managed-namespace
 
@@ -52,7 +57,7 @@ func NewRootCommand() *cobra.Command {
 		Short: "workflow-controller is the controller to operate on workflows",
 		RunE: func(c *cobra.Command, args []string) error {
 			cli.SetLogLevel(logLevel)
-			cli.SetGLogLevel(glogLevel)
+			cmdutil.SetGLogLevel(glogLevel)
 			stats.RegisterStackDumper()
 			stats.StartStatsTicker(5 * time.Minute)
 
@@ -64,6 +69,7 @@ func NewRootCommand() *cobra.Command {
 			log.Infof("dev v4 log: qps %f, burst %d", qps, burst)
 			config.Burst = burst
 			config.QPS = qps
+			metrics.AddMetricsTransportWrapper(config)
 
 			namespace, _, err := clientConfig.Namespace()
 			if err != nil {
@@ -82,17 +88,17 @@ func NewRootCommand() *cobra.Command {
 			}
 
 			// start a controller on instances of our custom resource
-			wfController := controller.NewWorkflowController(config, kubeclientset, wfclientset, namespace, managedNamespace, executorImage, executorImagePullPolicy, containerRuntimeExecutor, configMap)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			wfController.UpdateConfig()
+			wfController, err := controller.NewWorkflowController(ctx, config, kubeclientset, wfclientset, namespace, managedNamespace, executorImage, executorImagePullPolicy, containerRuntimeExecutor, configMap)
+			errors.CheckError(err)
 
-			go wfController.Run(ctx, workflowWorkers, podWorkers)
-			go wfController.MetricsServer(ctx)
-			go wfController.TelemetryServer(ctx)
-			go wfController.RunTTLController(ctx)
-			go wfController.RunCronController(ctx)
+			go wfController.Run(ctx, workflowWorkers, workflowTTLWorkers, podWorkers, podCleanupWorkers)
+
+			go func() {
+				log.Println(http.ListenAndServe("localhost:6060", nil))
+			}()
 
 			// Wait forever
 			select {}
@@ -108,13 +114,25 @@ func NewRootCommand() *cobra.Command {
 	command.Flags().StringVar(&logLevel, "loglevel", "info", "Set the logging level. One of: debug|info|warn|error")
 	command.Flags().IntVar(&glogLevel, "gloglevel", 0, "Set the glog logging level")
 	command.Flags().IntVar(&workflowWorkers, "workflow-workers", 32, "Number of workflow workers")
+	command.Flags().IntVar(&workflowTTLWorkers, "workflow-ttl-workers", 4, "Number of workflow TTL workers")
 	command.Flags().IntVar(&podWorkers, "pod-workers", 32, "Number of pod workers")
-	command.Flags().IntVar(&burst, "burst", 30, "brust")
-	command.Flags().Float32Var(&qps, "qps", 20.0, "Qps")
-
+	command.Flags().IntVar(&podCleanupWorkers, "pod-cleanup-workers", 4, "Number of pod cleanup workers")
+	command.Flags().IntVar(&burst, "burst", 30, "Maximum burst for throttle.")
+	command.Flags().Float32Var(&qps, "qps", 20.0, "Queries per second")
 	command.Flags().BoolVar(&namespaced, "namespaced", false, "run workflow-controller as namespaced mode")
 	command.Flags().StringVar(&managedNamespace, "managed-namespace", "", "namespace that workflow-controller watches, default to the installation namespace")
 	return &command
+}
+
+func init() {
+	cobra.OnInitialize(initConfig)
+}
+
+func initConfig() {
+	log.SetFormatter(&log.TextFormatter{
+		TimestampFormat: "2006-01-02T15:04:05.000Z",
+		FullTimestamp:   true,
+	})
 }
 
 func main() {

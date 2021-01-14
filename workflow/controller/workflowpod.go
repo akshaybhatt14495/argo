@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,11 +16,14 @@ import (
 	apierr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/pointer"
 
 	"github.com/argoproj/argo/errors"
 	"github.com/argoproj/argo/pkg/apis/workflow"
 	wfv1 "github.com/argoproj/argo/pkg/apis/workflow/v1alpha1"
+	errorsutil "github.com/argoproj/argo/util/errors"
+	"github.com/argoproj/argo/util/intstr"
 	"github.com/argoproj/argo/workflow/common"
 	"github.com/argoproj/argo/workflow/util"
 )
@@ -53,16 +57,48 @@ var (
 	hostPathSocket = apiv1.HostPathSocket
 )
 
-func (woc *wfOperationCtx) getVolumeMountDockerSock() apiv1.VolumeMount {
+func (woc *wfOperationCtx) getVolumeMountDockerSock(tmpl *wfv1.Template) apiv1.VolumeMount {
 	return apiv1.VolumeMount{
 		Name:      common.DockerSockVolumeName,
-		MountPath: "/var/run/docker.sock",
-		ReadOnly:  true,
+		MountPath: getDockerSockPath(tmpl),
+		ReadOnly:  getDockerSockReadOnly(tmpl),
 	}
 }
 
-func (woc *wfOperationCtx) getVolumeDockerSock() apiv1.Volume {
-	dockerSockPath := "/var/run/docker.sock"
+func getDockerSockReadOnly(tmpl *wfv1.Template) bool {
+	return !hasWindowsOSNodeSelector(tmpl.NodeSelector)
+}
+
+func getDockerSockPath(tmpl *wfv1.Template) string {
+	if hasWindowsOSNodeSelector(tmpl.NodeSelector) {
+		return "\\\\.\\pipe\\docker_engine"
+	}
+
+	return "/var/run/docker.sock"
+}
+
+func getVolumeHostPathType(tmpl *wfv1.Template) *apiv1.HostPathType {
+	if hasWindowsOSNodeSelector(tmpl.NodeSelector) {
+		return nil
+	}
+
+	return &hostPathSocket
+}
+
+func hasWindowsOSNodeSelector(nodeSelector map[string]string) bool {
+	if nodeSelector == nil {
+		return false
+	}
+
+	if os, keyExists := nodeSelector["kubernetes.io/os"]; keyExists && os == "windows" {
+		return true
+	}
+
+	return false
+}
+
+func (woc *wfOperationCtx) getVolumeDockerSock(tmpl *wfv1.Template) apiv1.Volume {
+	dockerSockPath := getDockerSockPath(tmpl)
 
 	if woc.controller.Config.DockerSockPath != "" {
 		dockerSockPath = woc.controller.Config.DockerSockPath
@@ -77,41 +113,70 @@ func (woc *wfOperationCtx) getVolumeDockerSock() apiv1.Volume {
 		VolumeSource: apiv1.VolumeSource{
 			HostPath: &apiv1.HostPathVolumeSource{
 				Path: dockerSockPath,
-				Type: &hostPathSocket,
+				Type: getVolumeHostPathType(tmpl),
 			},
 		},
 	}
 }
 
 func (woc *wfOperationCtx) hasPodSpecPatch(tmpl *wfv1.Template) bool {
-	return woc.wf.Spec.HasPodSpecPatch() || tmpl.HasPodSpecPatch()
+	return woc.execWf.Spec.HasPodSpecPatch() || tmpl.HasPodSpecPatch()
 }
 
 type createWorkflowPodOpts struct {
 	includeScriptOutput bool
 	onExitPod           bool
+	executionDeadline   time.Time
 }
 
-func (woc *wfOperationCtx) createWorkflowPod(nodeName string, mainCtr apiv1.Container, tmpl *wfv1.Template, opts *createWorkflowPodOpts) (*apiv1.Pod, error) {
+func (woc *wfOperationCtx) createWorkflowPod(ctx context.Context, nodeName string, mainCtr apiv1.Container, tmpl *wfv1.Template, opts *createWorkflowPodOpts) (*apiv1.Pod, error) {
 	nodeID := woc.wf.NodeID(nodeName)
 	woc.log.Debugf("Creating Pod: %s (%s)", nodeName, nodeID)
+
+	// we must check to see if the pod exists rather than just optimistically creating the pod and see if we get
+	// an `AlreadyExists` error because we won't get that error if there is not enough resources.
+	// Performance enhancement: Code later in this func is expensive to execute, so return quickly if we can.
+	obj, exists, err := woc.controller.podInformer.GetStore().Get(cache.ExplicitKey(woc.wf.Namespace + "/" + nodeID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pod from informer store: %w", err)
+	}
+	if exists {
+		existing, ok := obj.(*apiv1.Pod)
+		if ok {
+			woc.log.WithField("podPhase", existing.Status.Phase).Debugf("Skipped pod %s (%s) creation: already exists", nodeName, nodeID)
+			return existing, nil
+		}
+	}
+
 	tmpl = tmpl.DeepCopy()
-	wfSpec := woc.wf.Spec.DeepCopy()
+	wfSpec := woc.execWf.Spec.DeepCopy()
 
 	mainCtr.Name = common.MainContainerName
+	// Allow customization of main container resources.
+	if isResourcesSpecified(woc.controller.Config.MainContainer) {
+		mainCtr.Resources = *woc.controller.Config.MainContainer.Resources.DeepCopy()
+	}
+	// Container resources in workflow spec takes precedence over the main container's configuration in controller.
+	if isResourcesSpecified(tmpl.Container) && tmpl.Container.Name == common.MainContainerName {
+		mainCtr.Resources = *tmpl.Container.Resources.DeepCopy()
+	}
 
 	var activeDeadlineSeconds *int64
 	wfDeadline := woc.getWorkflowDeadline()
+	tmplActiveDeadlineSeconds, err := intstr.Int64(tmpl.ActiveDeadlineSeconds)
+	if err != nil {
+		return nil, err
+	}
 	if wfDeadline == nil || opts.onExitPod { //ignore the workflow deadline for exit handler so they still run if the deadline has passed
-		activeDeadlineSeconds = tmpl.ActiveDeadlineSeconds
+		activeDeadlineSeconds = tmplActiveDeadlineSeconds
 	} else {
 		wfActiveDeadlineSeconds := int64((*wfDeadline).Sub(time.Now().UTC()).Seconds())
 		if wfActiveDeadlineSeconds <= 0 {
 			return nil, nil
-		} else if tmpl.ActiveDeadlineSeconds == nil || wfActiveDeadlineSeconds < *tmpl.ActiveDeadlineSeconds {
+		} else if tmpl.ActiveDeadlineSeconds == nil || wfActiveDeadlineSeconds < *tmplActiveDeadlineSeconds {
 			activeDeadlineSeconds = &wfActiveDeadlineSeconds
 		} else {
-			activeDeadlineSeconds = tmpl.ActiveDeadlineSeconds
+			activeDeadlineSeconds = tmplActiveDeadlineSeconds
 		}
 	}
 
@@ -132,9 +197,9 @@ func (woc *wfOperationCtx) createWorkflowPod(nodeName string, mainCtr apiv1.Cont
 		},
 		Spec: apiv1.PodSpec{
 			RestartPolicy:         apiv1.RestartPolicyNever,
-			Volumes:               woc.createVolumes(),
+			Volumes:               woc.createVolumes(tmpl),
 			ActiveDeadlineSeconds: activeDeadlineSeconds,
-			ImagePullSecrets:      woc.wf.Spec.ImagePullSecrets,
+			ImagePullSecrets:      woc.execWf.Spec.ImagePullSecrets,
 		},
 	}
 
@@ -143,16 +208,16 @@ func (woc *wfOperationCtx) createWorkflowPod(nodeName string, mainCtr apiv1.Cont
 		pod.ObjectMeta.Labels[common.LabelKeyOnExit] = "true"
 	}
 
-	if woc.wf.Spec.HostNetwork != nil {
-		pod.Spec.HostNetwork = *woc.wf.Spec.HostNetwork
+	if woc.execWf.Spec.HostNetwork != nil {
+		pod.Spec.HostNetwork = *woc.execWf.Spec.HostNetwork
 	}
 
-	if woc.wf.Spec.DNSPolicy != nil {
-		pod.Spec.DNSPolicy = *woc.wf.Spec.DNSPolicy
+	if woc.execWf.Spec.DNSPolicy != nil {
+		pod.Spec.DNSPolicy = *woc.execWf.Spec.DNSPolicy
 	}
 
-	if woc.wf.Spec.DNSConfig != nil {
-		pod.Spec.DNSConfig = woc.wf.Spec.DNSConfig
+	if woc.execWf.Spec.DNSConfig != nil {
+		pod.Spec.DNSConfig = woc.execWf.Spec.DNSConfig
 	}
 
 	if woc.controller.Config.InstanceID != "" {
@@ -162,12 +227,12 @@ func (woc *wfOperationCtx) createWorkflowPod(nodeName string, mainCtr apiv1.Cont
 		pod.Spec.ShareProcessNamespace = pointer.BoolPtr(true)
 	}
 
-	err := woc.addArchiveLocation(pod, tmpl)
+	err = woc.addArchiveLocation(tmpl)
 	if err != nil {
 		return nil, err
 	}
 
-	err = woc.setupServiceAccount(pod, tmpl)
+	err = woc.setupServiceAccount(ctx, pod, tmpl)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +261,7 @@ func (woc *wfOperationCtx) createWorkflowPod(nodeName string, mainCtr apiv1.Cont
 	}
 
 	addSchedulingConstraints(pod, wfSpec, tmpl)
-	woc.addMetadata(pod, tmpl, opts.includeScriptOutput)
+	woc.addMetadata(pod, tmpl, opts)
 
 	err = addVolumeReferences(pod, woc.volumes, tmpl, woc.wf.Status.PersistentVolumeClaims)
 	if err != nil {
@@ -294,15 +359,32 @@ func (woc *wfOperationCtx) createWorkflowPod(nodeName string, mainCtr apiv1.Cont
 			return nil, errors.Wrap(err, "", "Error in Unmarshalling after merge the patch")
 		}
 	}
-	created, err := woc.controller.kubeclientset.CoreV1().Pods(woc.wf.ObjectMeta.Namespace).Create(pod)
+
+	// Check if the template has exceeded its timeout duration. If it hasn't set the applicable activeDeadlineSeconds
+	node := woc.wf.GetNodeByName(nodeName)
+	templateDeadline, err := woc.checkTemplateTimeout(tmpl, node)
+	if err != nil {
+		return nil, err
+	}
+
+	if templateDeadline != nil && (pod.Spec.ActiveDeadlineSeconds == nil || time.Since(*templateDeadline).Seconds() < float64(*pod.Spec.ActiveDeadlineSeconds)) {
+		newActiveDeadlineSeconds := int64(time.Until(*templateDeadline).Seconds())
+		if newActiveDeadlineSeconds <= 1 {
+			return nil, fmt.Errorf("%s exceeded its deadline", nodeName)
+		}
+		woc.log.Debugf("Setting new activeDeadlineSeconds %d for pod %s/%s due to templateDeadline", newActiveDeadlineSeconds, pod.Namespace, pod.Name)
+		pod.Spec.ActiveDeadlineSeconds = &newActiveDeadlineSeconds
+	}
+
+	created, err := woc.controller.kubeclientset.CoreV1().Pods(woc.wf.ObjectMeta.Namespace).Create(ctx, pod, metav1.CreateOptions{})
 	if err != nil {
 		if apierr.IsAlreadyExists(err) {
 			// workflow pod names are deterministic. We can get here if the
 			// controller fails to persist the workflow after creating the pod.
-			woc.log.Infof("Skipped pod %s (%s) creation: already exists", nodeName, nodeID)
+			woc.log.Infof("Failed pod %s (%s) creation: already exists", nodeName, nodeID)
 			return created, nil
 		}
-		if apierr.IsForbidden(err) {
+		if errorsutil.IsTransientErr(err) {
 			return nil, err
 		}
 		woc.log.Infof("Failed to create pod %s (%s): %v", nodeName, nodeID, err)
@@ -317,14 +399,17 @@ func (woc *wfOperationCtx) createWorkflowPod(nodeName string, mainCtr apiv1.Cont
 func substitutePodParams(pod *apiv1.Pod, globalParams common.Parameters, tmpl *wfv1.Template) (*apiv1.Pod, error) {
 	podParams := globalParams.DeepCopy()
 	for _, inParam := range tmpl.Inputs.Parameters {
-		podParams["inputs.parameters."+inParam.Name] = *inParam.Value
+		podParams["inputs.parameters."+inParam.Name] = inParam.Value.String()
 	}
 	podParams[common.LocalVarPodName] = pod.Name
 	specBytes, err := json.Marshal(pod)
 	if err != nil {
 		return nil, err
 	}
-	fstTmpl := fasttemplate.New(string(specBytes), "{{", "}}")
+	fstTmpl, err := fasttemplate.NewTemplate(string(specBytes), "{{", "}}")
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse argo varaible: %w", err)
+	}
 	newSpecBytes, err := common.Replace(fstTmpl, podParams, true)
 	if err != nil {
 		return nil, err
@@ -353,6 +438,7 @@ func (woc *wfOperationCtx) newWaitContainer(tmpl *wfv1.Template) (*apiv1.Contain
 				Add: []apiv1.Capability{
 					// necessary to access main's root filesystem when run with a different user id
 					apiv1.Capability("SYS_PTRACE"),
+					apiv1.Capability("SYS_CHROOT"),
 				},
 			},
 		}
@@ -362,7 +448,7 @@ func (woc *wfOperationCtx) newWaitContainer(tmpl *wfv1.Template) (*apiv1.Contain
 			ctr.SecurityContext.Privileged = pointer.BoolPtr(true)
 		}
 	case "", common.ContainerRuntimeExecutorDocker:
-		ctr.VolumeMounts = append(ctr.VolumeMounts, woc.getVolumeMountDockerSock())
+		ctr.VolumeMounts = append(ctr.VolumeMounts, woc.getVolumeMountDockerSock(tmpl))
 	}
 	return ctr, nil
 }
@@ -443,7 +529,7 @@ func (woc *wfOperationCtx) createEnvVars() []apiv1.EnvVar {
 	return execEnvVars
 }
 
-func (woc *wfOperationCtx) createVolumes() []apiv1.Volume {
+func (woc *wfOperationCtx) createVolumes(tmpl *wfv1.Template) []apiv1.Volume {
 	volumes := []apiv1.Volume{
 		volumePodMetadata,
 	}
@@ -465,7 +551,7 @@ func (woc *wfOperationCtx) createVolumes() []apiv1.Volume {
 	case common.ContainerRuntimeExecutorKubelet, common.ContainerRuntimeExecutorK8sAPI, common.ContainerRuntimeExecutorPNS:
 		return volumes
 	default:
-		return append(volumes, woc.getVolumeDockerSock())
+		return append(volumes, woc.getVolumeDockerSock(tmpl))
 	}
 }
 
@@ -486,9 +572,9 @@ func (woc *wfOperationCtx) newExecContainer(name string, tmpl *wfv1.Template) *a
 		}
 	}
 	if isResourcesSpecified(woc.controller.Config.Executor) {
-		exec.Resources = woc.controller.Config.Executor.Resources
+		exec.Resources = *woc.controller.Config.Executor.Resources.DeepCopy()
 	} else if woc.controller.Config.ExecutorResources != nil {
-		exec.Resources = *woc.controller.Config.ExecutorResources
+		exec.Resources = *woc.controller.Config.ExecutorResources.DeepCopy()
 	}
 	if woc.controller.Config.KubeConfig != nil {
 		path := woc.controller.Config.KubeConfig.MountPath
@@ -510,8 +596,8 @@ func (woc *wfOperationCtx) newExecContainer(name string, tmpl *wfv1.Template) *a
 	executorServiceAccountName := ""
 	if tmpl.Executor != nil && tmpl.Executor.ServiceAccountName != "" {
 		executorServiceAccountName = tmpl.Executor.ServiceAccountName
-	} else if woc.wf.Spec.Executor != nil && woc.wf.Spec.Executor.ServiceAccountName != "" {
-		executorServiceAccountName = woc.wf.Spec.Executor.ServiceAccountName
+	} else if woc.execWf.Spec.Executor != nil && woc.execWf.Spec.Executor.ServiceAccountName != "" {
+		executorServiceAccountName = woc.execWf.Spec.Executor.ServiceAccountName
 	}
 	if executorServiceAccountName != "" {
 		exec.VolumeMounts = append(exec.VolumeMounts, apiv1.VolumeMount{
@@ -524,11 +610,11 @@ func (woc *wfOperationCtx) newExecContainer(name string, tmpl *wfv1.Template) *a
 }
 
 func isResourcesSpecified(ctr *apiv1.Container) bool {
-	return ctr != nil && (ctr.Resources.Limits.Cpu() != nil || ctr.Resources.Limits.Memory() != nil)
+	return ctr != nil && len(ctr.Resources.Limits) != 0
 }
 
 // addMetadata applies metadata specified in the template
-func (woc *wfOperationCtx) addMetadata(pod *apiv1.Pod, tmpl *wfv1.Template, includeScriptOutput bool) {
+func (woc *wfOperationCtx) addMetadata(pod *apiv1.Pod, tmpl *wfv1.Template, opts *createWorkflowPodOpts) {
 	for k, v := range tmpl.Metadata.Annotations {
 		pod.ObjectMeta.Annotations[k] = v
 	}
@@ -537,14 +623,20 @@ func (woc *wfOperationCtx) addMetadata(pod *apiv1.Pod, tmpl *wfv1.Template, incl
 	}
 
 	execCtl := common.ExecutionControl{
-		IncludeScriptOutput: includeScriptOutput,
+		IncludeScriptOutput: opts.includeScriptOutput,
 	}
 
 	if woc.workflowDeadline != nil {
 		execCtl.Deadline = woc.workflowDeadline
 	}
 
-	if woc.workflowDeadline != nil || includeScriptOutput {
+	// If we're passed down an executionDeadline, only set it if there isn't one set already, or if it's before than
+	// the one already set.
+	if !opts.executionDeadline.IsZero() && (execCtl.Deadline == nil || opts.executionDeadline.Before(*execCtl.Deadline)) {
+		execCtl.Deadline = &opts.executionDeadline
+	}
+
+	if execCtl.Deadline != nil || opts.includeScriptOutput {
 		execCtlBytes, err := json.Marshal(execCtl)
 		if err != nil {
 			panic(err)
@@ -844,7 +936,7 @@ func addOutputArtifactsVolumes(pod *apiv1.Pod, tmpl *wfv1.Template) {
 // information configured in the controller, for the purposes of archiving outputs. This is skipped
 // for templates which do not need to archive anything, or have explicitly set an archive location
 // in the template.
-func (woc *wfOperationCtx) addArchiveLocation(pod *apiv1.Pod, tmpl *wfv1.Template) error {
+func (woc *wfOperationCtx) addArchiveLocation(tmpl *wfv1.Template) error {
 	// needLocation keeps track if the workflow needs to have an archive location set.
 	// If so, and one was not supplied (or defaulted), we will return error
 	var needLocation bool
@@ -909,8 +1001,13 @@ func (woc *wfOperationCtx) addArchiveLocation(pod *apiv1.Pod, tmpl *wfv1.Templat
 	} else if ossLocation := woc.artifactRepository.OSS; ossLocation != nil {
 		woc.log.Debugf("Setting OSS artifact repository information")
 		artLocationKey := ossLocation.KeyFormat
+		// NOTE: we use unresolved variables, will get substituted later
+		if artLocationKey == "" {
+			artLocationKey = path.Join(ossLocation.KeyFormat, common.DefaultArchivePattern)
+		}
 		tmpl.ArchiveLocation.OSS = &wfv1.OSSArtifact{
 			OSSBucket: wfv1.OSSBucket{
+				Bucket:          ossLocation.Bucket,
 				Endpoint:        ossLocation.Endpoint,
 				AccessKeySecret: ossLocation.AccessKeySecret,
 				SecretKeySecret: ossLocation.SecretKeySecret,
@@ -937,18 +1034,18 @@ func (woc *wfOperationCtx) addArchiveLocation(pod *apiv1.Pod, tmpl *wfv1.Templat
 }
 
 // setupServiceAccount sets up service account and token.
-func (woc *wfOperationCtx) setupServiceAccount(pod *apiv1.Pod, tmpl *wfv1.Template) error {
+func (woc *wfOperationCtx) setupServiceAccount(ctx context.Context, pod *apiv1.Pod, tmpl *wfv1.Template) error {
 	if tmpl.ServiceAccountName != "" {
 		pod.Spec.ServiceAccountName = tmpl.ServiceAccountName
-	} else if woc.wf.Spec.ServiceAccountName != "" {
-		pod.Spec.ServiceAccountName = woc.wf.Spec.ServiceAccountName
+	} else if woc.execWf.Spec.ServiceAccountName != "" {
+		pod.Spec.ServiceAccountName = woc.execWf.Spec.ServiceAccountName
 	}
 
 	var automountServiceAccountToken *bool
 	if tmpl.AutomountServiceAccountToken != nil {
 		automountServiceAccountToken = tmpl.AutomountServiceAccountToken
-	} else if woc.wf.Spec.AutomountServiceAccountToken != nil {
-		automountServiceAccountToken = woc.wf.Spec.AutomountServiceAccountToken
+	} else if woc.execWf.Spec.AutomountServiceAccountToken != nil {
+		automountServiceAccountToken = woc.execWf.Spec.AutomountServiceAccountToken
 	}
 	if automountServiceAccountToken != nil && !*automountServiceAccountToken {
 		pod.Spec.AutomountServiceAccountToken = automountServiceAccountToken
@@ -957,11 +1054,11 @@ func (woc *wfOperationCtx) setupServiceAccount(pod *apiv1.Pod, tmpl *wfv1.Templa
 	executorServiceAccountName := ""
 	if tmpl.Executor != nil && tmpl.Executor.ServiceAccountName != "" {
 		executorServiceAccountName = tmpl.Executor.ServiceAccountName
-	} else if woc.wf.Spec.Executor != nil && woc.wf.Spec.Executor.ServiceAccountName != "" {
-		executorServiceAccountName = woc.wf.Spec.Executor.ServiceAccountName
+	} else if woc.execWf.Spec.Executor != nil && woc.execWf.Spec.Executor.ServiceAccountName != "" {
+		executorServiceAccountName = woc.execWf.Spec.Executor.ServiceAccountName
 	}
 	if executorServiceAccountName != "" {
-		tokenName, err := common.GetServiceAccountTokenName(woc.controller.kubeclientset, pod.Namespace, executorServiceAccountName)
+		tokenName, err := common.GetServiceAccountTokenName(ctx, woc.controller.kubeclientset, pod.Namespace, executorServiceAccountName)
 		if err != nil {
 			return err
 		}
@@ -1067,7 +1164,10 @@ func verifyResolvedVariables(obj interface{}) error {
 		return err
 	}
 	var unresolvedErr error
-	fstTmpl := fasttemplate.New(string(str), "{{", "}}")
+	fstTmpl, err := fasttemplate.NewTemplate(string(str), "{{", "}}")
+	if err != nil {
+		return fmt.Errorf("unable to parse argo varaible: %w", err)
+	}
 	fstTmpl.ExecuteFuncString(func(w io.Writer, tag string) (int, error) {
 		unresolvedErr = errors.Errorf(errors.CodeBadRequest, "failed to resolve {{%s}}", tag)
 		return 0, nil

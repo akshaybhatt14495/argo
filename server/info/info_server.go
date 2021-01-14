@@ -6,11 +6,26 @@ import (
 	"github.com/argoproj/argo"
 	infopkg "github.com/argoproj/argo/pkg/apiclient/info"
 	wfv1 "github.com/argoproj/argo/pkg/apis/workflow/v1alpha1"
+	"github.com/argoproj/argo/server/auth"
 )
 
 type infoServer struct {
 	managedNamespace string
 	links            []*wfv1.Link
+}
+
+func (i *infoServer) GetUserInfo(ctx context.Context, _ *infopkg.GetUserInfoRequest) (*infopkg.GetUserInfoResponse, error) {
+	claims := auth.GetClaims(ctx)
+	if claims != nil {
+		return &infopkg.GetUserInfoResponse{
+			Subject:       claims.Subject,
+			Issuer:        claims.Issuer,
+			Groups:        claims.Groups,
+			Email:         claims.Email,
+			EmailVerified: claims.EmailVerified,
+		}, nil
+	}
+	return &infopkg.GetUserInfoResponse{}, nil
 }
 
 func (i *infoServer) GetInfo(context.Context, *infopkg.GetInfoRequest) (*infopkg.InfoResponse, error) {

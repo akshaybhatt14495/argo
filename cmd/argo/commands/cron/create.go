@@ -1,6 +1,7 @@
 package cron
 
 import (
+	"fmt"
 	"log"
 	"os"
 
@@ -16,18 +17,15 @@ import (
 )
 
 type cliCreateOpts struct {
-	output string // --output
-	strict bool   // --strict
-}
-
-type cronWorkflowSubmitOpts struct {
-	instanceId string
+	output   string // --output
+	schedule string // --schedule
+	strict   bool   // --strict
 }
 
 func NewCreateCommand() *cobra.Command {
 	var (
 		cliCreateOpts cliCreateOpts
-		submitOpts    cronWorkflowSubmitOpts
+		submitOpts    wfv1.SubmitOpts
 	)
 	var command = &cobra.Command{
 		Use:   "create FILE1 FILE2...",
@@ -41,17 +39,18 @@ func NewCreateCommand() *cobra.Command {
 			CreateCronWorkflows(args, &cliCreateOpts, &submitOpts)
 		},
 	}
+
+	util.PopulateSubmitOpts(command, &submitOpts, false)
 	command.Flags().StringVarP(&cliCreateOpts.output, "output", "o", "", "Output format. One of: name|json|yaml|wide")
-	command.Flags().StringVar(&submitOpts.instanceId, "instanceid", "", "submit with a specific controller's instance id label")
 	command.Flags().BoolVar(&cliCreateOpts.strict, "strict", true, "perform strict workflow validation")
+	command.Flags().StringVar(&cliCreateOpts.schedule, "schedule", "", "override cron workflow schedule")
 	return command
 }
 
-func CreateCronWorkflows(filePaths []string, cliOpts *cliCreateOpts, submitOpts *cronWorkflowSubmitOpts) {
+func CreateCronWorkflows(filePaths []string, cliOpts *cliCreateOpts, submitOpts *wfv1.SubmitOpts) {
 
 	ctx, apiClient := client.NewAPIClient()
 	serviceClient := apiClient.NewCronWorkflowServiceClient()
-	namespace := client.Namespace()
 
 	fileContents, err := util.ReadManifest(filePaths...)
 	if err != nil {
@@ -70,15 +69,28 @@ func CreateCronWorkflows(filePaths []string, cliOpts *cliCreateOpts, submitOpts 
 	}
 
 	for _, cronWf := range cronWorkflows {
-		applySubmitOpts(&cronWf, submitOpts)
+
+		if cliOpts.schedule != "" {
+			cronWf.Spec.Schedule = cliOpts.schedule
+		}
+
+		newWf := wfv1.Workflow{Spec: cronWf.Spec.WorkflowSpec}
+		err := util.ApplySubmitOpts(&newWf, submitOpts)
+		if err != nil {
+			log.Fatal(err)
+		}
+		cronWf.Spec.WorkflowSpec = newWf.Spec
+		if cronWf.Namespace == "" {
+			cronWf.Namespace = client.Namespace()
+		}
 		created, err := serviceClient.CreateCronWorkflow(ctx, &cronworkflowpkg.CreateCronWorkflowRequest{
-			Namespace:    namespace,
+			Namespace:    cronWf.Namespace,
 			CronWorkflow: &cronWf,
 		})
 		if err != nil {
 			log.Fatalf("Failed to create workflow template: %v", err)
 		}
-		printCronWorkflowTemplate(created)
+		fmt.Print(getCronWorkflowGet(created))
 	}
 }
 
@@ -99,15 +111,4 @@ func unmarshalCronWorkflows(wfBytes []byte, strict bool) []wfv1.CronWorkflow {
 	}
 	log.Fatalf("Failed to parse workflow template: %v", err)
 	return nil
-}
-
-func applySubmitOpts(cwf *wfv1.CronWorkflow, submitOpts *cronWorkflowSubmitOpts) {
-	labels := cwf.GetLabels()
-	if labels == nil {
-		labels = make(map[string]string)
-	}
-	if submitOpts.instanceId != "" {
-		labels[common.LabelKeyControllerInstanceID] = submitOpts.instanceId
-	}
-	cwf.SetLabels(labels)
 }

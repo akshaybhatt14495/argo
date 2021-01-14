@@ -6,6 +6,7 @@ import (
 
 	"github.com/argoproj/argo/config"
 	"github.com/argoproj/argo/persist/sqldb"
+	"github.com/argoproj/argo/util/instanceid"
 )
 
 type Persistence struct {
@@ -14,12 +15,7 @@ type Persistence struct {
 	workflowArchive       sqldb.WorkflowArchive
 }
 
-func newPersistence(kubeClient kubernetes.Interface) *Persistence {
-	configController := config.NewController(Namespace, "workflow-controller-configmap", kubeClient)
-	wcConfig, err := configController.Get()
-	if err != nil {
-		panic(err)
-	}
+func newPersistence(kubeClient kubernetes.Interface, wcConfig *config.Config) *Persistence {
 	persistence := wcConfig.Persistence
 	if persistence != nil {
 		if persistence.PostgreSQL != nil {
@@ -36,7 +32,8 @@ func newPersistence(kubeClient kubernetes.Interface) *Persistence {
 		if err != nil {
 			panic(err)
 		}
-		workflowArchive := sqldb.NewWorkflowArchive(session, persistence.GetClusterName(), Namespace, wcConfig.InstanceID)
+		instanceIDService := instanceid.NewService(wcConfig.InstanceID)
+		workflowArchive := sqldb.NewWorkflowArchive(session, persistence.GetClusterName(), Namespace, instanceIDService)
 		return &Persistence{session, offloadNodeStatusRepo, workflowArchive}
 	} else {
 		return &Persistence{offloadNodeStatusRepo: sqldb.ExplosiveOffloadNodeStatusRepo, workflowArchive: sqldb.NullWorkflowArchive}

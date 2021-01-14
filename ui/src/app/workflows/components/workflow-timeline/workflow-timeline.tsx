@@ -55,6 +55,9 @@ export class WorkflowTimeline extends React.Component<WorkflowTimelineProps, Wor
     }
 
     public render() {
+        if (!this.props.workflow.status.nodes) {
+            return <p>No nodes</p>;
+        }
         const nodes = Object.keys(this.props.workflow.status.nodes)
             .map(id => {
                 const node = this.props.workflow.status.nodes[id];
@@ -128,7 +131,7 @@ export class WorkflowTimeline extends React.Component<WorkflowTimelineProps, Wor
     }
 
     private ensureRunningWorkflowRefreshing(workflow: models.Workflow) {
-        const completedPhases = [models.NODE_PHASE.ERROR, models.NODE_PHASE.SUCCEEDED, models.NODE_PHASE.SKIPPED, models.NODE_PHASE.FAILED];
+        const completedPhases = [models.NODE_PHASE.ERROR, models.NODE_PHASE.SUCCEEDED, models.NODE_PHASE.SKIPPED, models.NODE_PHASE.OMITTED, models.NODE_PHASE.FAILED];
         const isCompleted = workflow && workflow.status && completedPhases.indexOf(workflow.status.phase) > -1;
         if (!this.refreshSubscription && !isCompleted) {
             this.refreshSubscription = Observable.interval(1000).subscribe(() => {

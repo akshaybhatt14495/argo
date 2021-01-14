@@ -19,32 +19,33 @@ in the past. However, a quick description should clarify each and their differen
 `Workflow`, you must define at least one (but usually more than one) `template` to run. This `template` can be of type
 `container`, `script`, `dag`, `steps`, `resource`, or `suspend` and can be referenced by an `entrypoint` or by other
 `dag`, and `step` templates.
-    
-    Here is an example of a `Workflow` with two `templates`:
-    ```yaml
-    apiVersion: argoproj.io/v1alpha1
-    kind: Workflow
-    metadata:
-      generateName: steps-
-    spec:
-      entrypoint: hello           # We reference our first "template" here
-  
-      templates:
-      - name: hello               # The first "template" in this Workflow, it is referenced by "entrypoint"
-        steps:                    # The type of this "template" is "steps"
-        - - name: hello
-            template: whalesay    # We reference our second "template" here
-            arguments:
-              parameters: [{name: message, value: "hello1"}]
-    
-      - name: whalesay             # The second "template" in this Workflow, it is referenced by "hello"
-        inputs:
-          parameters:
-          - name: message
-        container:                # The type of this "template" is "container"
-          image: docker/whalesay
-          command: [cowsay]
-          args: ["{{inputs.parameters.message}}"]```
+ 
+Here is an example of a `Workflow` with two `templates`:
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: steps-
+spec:
+  entrypoint: hello           # We reference our first "template" here
+
+  templates:
+  - name: hello               # The first "template" in this Workflow, it is referenced by "entrypoint"
+    steps:                    # The type of this "template" is "steps"
+    - - name: hello
+        template: whalesay    # We reference our second "template" here
+        arguments:
+          parameters: [{name: message, value: "hello1"}]
+
+  - name: whalesay             # The second "template" in this Workflow, it is referenced by "hello"
+    inputs:
+      parameters:
+      - name: message
+    container:                # The type of this "template" is "container"
+      image: docker/whalesay
+      command: [cowsay]
+      args: ["{{inputs.parameters.message}}"]
+```
   
 - A `WorkflowTemplate` is a definition of a `Workflow` that lives in your cluster. Since it is a definition of a `Workflow`
 it also contains `templates`. These `templates` can be referenced from within the `WorkflowTemplate` and from other `Workflows`
@@ -187,6 +188,37 @@ to pass in "live" arguments and reference other templates (those other templates
 
 This behavior has been problematic and dangerous. It causes confusion and has design inconsistencies.
 
+> 2.9 and after
+#### Create `Workflow` from `WorkflowTemplate` Spec
+You can create `Workflow` from `WorkflowTemplate` spec using `workflowTemplateRef`. If you pass the arguments to created `Workflow`, it will be merged with WorkflowTemplate arguments 
+Here is an example for referring `WorkflowTemplate` as Workflow with passing `entrypoint` and `Workflow Arguments` to `WorkflowTemplate`
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: workflow-template-hello-world-
+spec:
+  entrypoint: whalesay-template
+  arguments:
+    parameters:
+      - name: message
+        value: "from workflow"
+  workflowTemplateRef:
+    name: workflow-template-submittable
+```  
+
+Here is an example of a referring `WorkflowTemplate` as Workflow and using `WorkflowTemplates`'s `entrypoint` and `Workflow Arguments`
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: workflow-template-hello-world-
+spec:
+  workflowTemplateRef:
+    name: workflow-template-submittable
+
+```
+
 ## Managing `WorkflowTemplates`
 
 ### CLI
@@ -200,7 +232,13 @@ argo template create https://raw.githubusercontent.com/argoproj/argo/master/exam
 The submit a workflow using one of those templates:
 
 ```
-argo submit https://raw.githubusercontent.com/argoproj/argo/master/examples/workflow-template/hello-world.yam
+argo submit https://raw.githubusercontent.com/argoproj/argo/master/examples/workflow-template/hello-world.yaml
+```
+> 2.7 and after
+The submit a `WorkflowTemplate` as a `Workflow`:
+```sh
+argo submit --from workflowtemplate/workflow-template-submittable
+
 ```
 
 ### `kubectl`

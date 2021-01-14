@@ -5,10 +5,8 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"sigs.k8s.io/yaml"
-
 	wfv1 "github.com/argoproj/argo/pkg/apis/workflow/v1alpha1"
+	"github.com/argoproj/argo/test/util"
 )
 
 var (
@@ -43,20 +41,29 @@ func LoadTestWorkflow(path string) *wfv1.Workflow {
 
 // LoadWorkflowFromBytes returns a workflow unmarshalled from an yaml byte array
 func LoadWorkflowFromBytes(yamlBytes []byte) *wfv1.Workflow {
-	var wf wfv1.Workflow
-	err := yaml.Unmarshal(yamlBytes, &wf)
-	if err != nil {
-		panic(err)
-	}
-	return &wf
+	v := &wfv1.Workflow{}
+	util.MustUnmarshallYAML(string(yamlBytes), v)
+	return v
 }
 
-// LoadUnstructuredFromBytes returns an Unstructured unmarshalled from an yaml byte array
-func LoadUnstructuredFromBytes(yamlBytes []byte) *unstructured.Unstructured {
-	var un unstructured.Unstructured
-	err := yaml.Unmarshal(yamlBytes, &un)
+// LoadTestWorkflow returns a workflow relative to the test file
+func LoadTestWorkflowTemplate(path string) *wfv1.WorkflowTemplate {
+	yamlBytes, err := ioutil.ReadFile(path)
 	if err != nil {
 		panic(err)
 	}
-	return &un
+	return LoadWorkflowTemplateFromBytes(yamlBytes)
+}
+
+// LoadWorkflowFromBytes returns a workflow unmarshalled from an yaml byte array
+func LoadWorkflowTemplateFromBytes(yamlBytes []byte) *wfv1.WorkflowTemplate {
+	v := &wfv1.WorkflowTemplate{}
+	util.MustUnmarshallYAML(string(yamlBytes), v)
+	return v
+}
+
+func LoadClusterWorkflowTemplateFromBytes(yamlBytes []byte) *wfv1.ClusterWorkflowTemplate {
+	v := &wfv1.ClusterWorkflowTemplate{}
+	util.MustUnmarshallYAML(string(yamlBytes), v)
+	return v
 }

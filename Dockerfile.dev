@@ -33,21 +33,12 @@ ENV DOCKER_CHANNEL stable
 ENV DOCKER_VERSION 18.09.1
 
 RUN if [ "${IMAGE_OS}" = "linux" -a "${IMAGE_ARCH}" = "amd64" ]; then \
-        wget -O docker.tgz https://download.docker.com/linux/static/${DOCKER_CHANNEL}/x86_64/docker-${DOCKER_VERSION}.tgz; \
+    	wget -O docker.tgz https://download.docker.com/linux/static/${DOCKER_CHANNEL}/x86_64/docker-${DOCKER_VERSION}.tgz --no-check-certificate ; \
     elif [ "${IMAGE_OS}" = "linux" -a "${IMAGE_ARCH}" = "arm64" ]; then \
-        wget -O docker.tgz https://download.docker.com/linux/static/${DOCKER_CHANNEL}/aarch64/docker-${DOCKER_VERSION}.tgz; \
+	wget -O docker.tgz https://download.docker.com/linux/static/${DOCKER_CHANNEL}/aarch64/docker-${DOCKER_VERSION}.tgz --no-check-certificate ; \
     fi && \
     tar --extract --file docker.tgz --strip-components 1 --directory /usr/local/bin/ && \
     rm docker.tgz
-
-# Install dep
-ENV DEP_VERSION=0.5.1
-RUN if [ "${IMAGE_OS}" = "linux" -a "${IMAGE_ARCH}" = "amd64" ]; then \
-        wget https://github.com/golang/dep/releases/download/v${DEP_VERSION}/dep-linux-amd64 -O /usr/local/bin/dep; \
-    elif [ "${IMAGE_OS}" = "linux" -a "${IMAGE_ARCH}" = "arm64" ]; then \
-        wget https://github.com/golang/dep/releases/download/v${DEP_VERSION}/dep-linux-arm64 -O /usr/local/bin/dep; \
-    fi && \
-    chmod +x /usr/local/bin/dep
 
 ####################################################################################################
 # argoexec-base
@@ -59,7 +50,7 @@ ARG IMAGE_OS=linux
 ARG IMAGE_ARCH=amd64
 
 # NOTE: keep the version synced with https://storage.googleapis.com/kubernetes-release/release/stable.txt
-ENV KUBECTL_VERSION=1.15.1
+ENV KUBECTL_VERSION=1.18.8
 ENV JQ_VERSION=1.6
 RUN apt-get update && \
     apt-get --no-install-recommends install -y curl procps git apt-utils apt-transport-https ca-certificates tar mime-support && \
@@ -89,6 +80,7 @@ ENTRYPOINT [ "argoexec" ]
 # workflow-controller
 ####################################################################################################
 FROM scratch as workflow-controller
+USER 8737
 # Add timezone data
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 COPY workflow-controller /bin/
@@ -98,9 +90,10 @@ ENTRYPOINT [ "workflow-controller" ]
 # argocli
 ####################################################################################################
 FROM scratch as argocli
+USER 8737
 COPY --from=argoexec-base /etc/ssh/ssh_known_hosts /etc/ssh/ssh_known_hosts
 COPY --from=argoexec-base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY argo-server.crt argo-server.crt
-COPY argo-server.key argo-server.key
+COPY --chown=8737 argo-server.crt argo-server.crt
+COPY --chown=8737 argo-server.key argo-server.key
 COPY argo /bin/
 ENTRYPOINT [ "argo" ]

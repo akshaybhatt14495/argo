@@ -4,9 +4,11 @@ import {Link, RouteComponentProps} from 'react-router-dom';
 import * as models from '../../../../models';
 import {uiUrl} from '../../../shared/base';
 import {BasePage} from '../../../shared/components/base-page';
+import {ErrorNotice} from '../../../shared/components/error-notice';
+import {ExampleManifests} from '../../../shared/components/example-manifests';
 import {Loading} from '../../../shared/components/loading';
 import {NamespaceFilter} from '../../../shared/components/namespace-filter';
-import {ResourceSubmit} from '../../../shared/components/resource-submit';
+import {ResourceEditor} from '../../../shared/components/resource-editor/resource-editor';
 import {Timestamp} from '../../../shared/components/timestamp';
 import {ZeroState} from '../../../shared/components/zero-state';
 import {Consumer} from '../../../shared/context';
@@ -17,7 +19,6 @@ import {Utils} from '../../../shared/utils';
 require('./workflow-template-list.scss');
 
 interface State {
-    loading: boolean;
     namespace: string;
     templates?: models.WorkflowTemplate[];
     error?: Error;
@@ -29,10 +30,7 @@ export class WorkflowTemplateList extends BasePage<RouteComponentProps<any>, Sta
     }
 
     private set namespace(namespace: string) {
-        this.setState({namespace});
-        history.pushState(null, '', uiUrl('workflow-templates/' + namespace));
-        this.fetchWorkflowTemplates();
-        Utils.setCurrentNamespace(namespace);
+        this.fetchWorkflowTemplates(namespace);
     }
 
     private get sidePanel() {
@@ -45,20 +43,14 @@ export class WorkflowTemplateList extends BasePage<RouteComponentProps<any>, Sta
 
     constructor(props: RouteComponentProps<any>, context: any) {
         super(props, context);
-        this.state = {loading: true, namespace: this.props.match.params.namespace || Utils.getCurrentNamespace() || ''};
+        this.state = {namespace: this.props.match.params.namespace || ''};
     }
 
     public componentDidMount(): void {
-        this.fetchWorkflowTemplates();
+        this.fetchWorkflowTemplates(this.namespace);
     }
 
     public render() {
-        if (this.state.loading) {
-            return <Loading />;
-        }
-        if (this.state.error) {
-            throw this.state.error;
-        }
         return (
             <Consumer>
                 {ctx => (
@@ -79,24 +71,22 @@ export class WorkflowTemplateList extends BasePage<RouteComponentProps<any>, Sta
                         }}>
                         {this.renderTemplates()}
                         <SlidingPanel isShown={this.sidePanel !== null} onClose={() => (this.sidePanel = null)}>
-                            <ResourceSubmit<models.WorkflowTemplate>
-                                resourceName={'Workflow Template'}
-                                defaultResource={exampleWorkflowTemplate(this.namespace || 'default')}
-                                validate={wfValue => {
-                                    if (!wfValue || !wfValue.metadata) {
-                                        return {valid: false, message: 'Invalid WorkflowTemplate: metadata cannot be blank'};
-                                    }
-                                    if (!wfValue.metadata.namespace) {
-                                        return {valid: false, message: 'Invalid WorkflowTemplate: metadata.namespace cannot be blank'};
-                                    }
-                                    return {valid: true};
-                                }}
-                                onSubmit={wfTmpl => {
-                                    return services.workflowTemplate
+                            <ResourceEditor
+                                title='New Workflow Template'
+                                kind='WorkflowTemplate'
+                                upload={true}
+                                namespace={this.namespace || 'default'}
+                                value={exampleWorkflowTemplate()}
+                                onSubmit={wfTmpl =>
+                                    services.workflowTemplate
                                         .create(wfTmpl, wfTmpl.metadata.namespace)
-                                        .then(wf => ctx.navigation.goto(uiUrl(`workflow-templates/${wf.metadata.namespace}/${wf.metadata.name}`)));
-                                }}
+                                        .then(wf => ctx.navigation.goto(uiUrl(`workflow-templates/${wf.metadata.namespace}/${wf.metadata.name}`)))
+                                }
+                                editing={true}
                             />
+                            <p>
+                                <ExampleManifests />.
+                            </p>
                         </SlidingPanel>
                     </Page>
                 )}
@@ -104,29 +94,33 @@ export class WorkflowTemplateList extends BasePage<RouteComponentProps<any>, Sta
         );
     }
 
-    private fetchWorkflowTemplates(): void {
-        services.info
-            .getInfo()
-            .then(info => {
-                if (info.managedNamespace && info.managedNamespace !== this.namespace) {
-                    this.namespace = info.managedNamespace;
-                }
-                return services.workflowTemplate.list(this.namespace);
-            })
-            .then(templates => this.setState({templates, loading: false}))
-            .catch(error => this.setState({error, loading: false}));
+    private saveHistory() {
+        this.url = uiUrl('workflow-templates/' + this.namespace || '');
+        Utils.setCurrentNamespace(this.namespace);
+    }
+
+    private fetchWorkflowTemplates(namespace: string): void {
+        services.workflowTemplate
+            .list(namespace)
+            .then(templates => this.setState({error: null, namespace, templates}, this.saveHistory))
+            .catch(error => this.setState({error}));
     }
 
     private renderTemplates() {
+        if (this.state.error) {
+            return <ErrorNotice error={this.state.error} style={{margin: 20}} />;
+        }
         if (!this.state.templates) {
             return <Loading />;
         }
-        const learnMore = <a href='https://github.com/argoproj/argo/blob/master/docs/workflow-templates.md'>Learn more</a>;
+        const learnMore = <a href='https://argoproj.github.io/argo/workflow-templates/'>Learn more</a>;
         if (this.state.templates.length === 0) {
             return (
                 <ZeroState title='No workflow templates'>
                     <p>You can create new templates here or using the CLI.</p>
-                    <p>{learnMore}.</p>
+                    <p>
+                        <ExampleManifests />. {learnMore}.
+                    </p>
                 </ZeroState>
             );
         }
@@ -157,7 +151,7 @@ export class WorkflowTemplateList extends BasePage<RouteComponentProps<any>, Sta
                         ))}
                     </div>
                     <p>
-                        <i className='fa fa-info-circle' /> Workflow templates are reusable templates you can create new workflows from. {learnMore}.
+                        <i className='fa fa-info-circle' /> Workflow templates are reusable templates you can create new workflows from. <ExampleManifests />. {learnMore}.
                     </p>
                 </div>
             </div>

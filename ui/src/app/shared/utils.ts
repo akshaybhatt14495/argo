@@ -46,12 +46,8 @@ export const Utils = {
         }
     },
 
-    isNodeSuspended(node: models.NodeStatus): boolean {
-        return node.type === 'Suspend' && node.phase === 'Running';
-    },
-
     isWorkflowSuspended(wf: models.Workflow): boolean {
-        if (wf === null || wf.spec === null) {
+        if (!wf || !wf.spec) {
             return false;
         }
         if (wf.spec.suspend !== undefined && wf.spec.suspend) {
@@ -68,14 +64,21 @@ export const Utils = {
     },
 
     isWorkflowRunning(wf: models.Workflow): boolean {
-        if (wf === null || wf.spec === null) {
+        if (!wf || !wf.spec) {
             return false;
         }
         return wf.status.phase === 'Running';
     },
 
+    onNamespaceChange(value: string) {
+        // noop
+    },
+
     setCurrentNamespace(value: string): void {
-        localStorage.setItem('current_namespace', value);
+        if (value) {
+            localStorage.setItem('current_namespace', value);
+            this.onNamespaceChange(value);
+        }
     },
 
     getCurrentNamespace(): string {

@@ -3,10 +3,13 @@ package executor
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
 	"time"
 
@@ -17,6 +20,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/argoproj/argo/errors"
+	wfv1 "github.com/argoproj/argo/pkg/apis/workflow/v1alpha1"
+	"github.com/argoproj/argo/workflow/common"
+	os_specific "github.com/argoproj/argo/workflow/executor/os-specific"
 )
 
 // ExecResource will run kubectl action against a manifest
@@ -36,6 +42,9 @@ func (we *WorkflowExecutor) ExecResource(action string, manifestPath string, fla
 		return "", "", errors.New(errors.CodeBadRequest, errMsg)
 	}
 	if action == "delete" {
+		return "", "", nil
+	}
+	if action == "get" && len(out) == 0 {
 		return "", "", nil
 	}
 	obj := unstructured.Unstructured{}
@@ -110,8 +119,29 @@ func (g gjsonLabels) Get(label string) string {
 	return gjson.GetBytes(g.json, label).String()
 }
 
+// signalMonitoring start the goroutine which listens for a SIGUSR2.
+// Upon receiving of the signal, We update the pod annotation and exit the process.
+func (we *WorkflowExecutor) signalMonitoring(ctx context.Context) {
+	log.Infof("Starting SIGUSR2 signal monitor")
+	sigs := make(chan os.Signal, 1)
+
+	signal.Notify(sigs, os_specific.GetOsSignal())
+	go func() {
+		for {
+			<-sigs
+			log.Infof("Received SIGUSR2 signal. Process is terminated")
+			_ = we.AddAnnotation(ctx, common.AnnotationKeyNodeMessage, "Received user signal to terminate the workflow")
+			os.Exit(130)
+		}
+	}()
+}
+
 // WaitResource waits for a specific resource to satisfy either the success or failure condition
-func (we *WorkflowExecutor) WaitResource(resourceNamespace string, resourceName string) error {
+func (we *WorkflowExecutor) WaitResource(ctx context.Context, resourceNamespace string, resourceName string) error {
+
+	// Monitor the SIGTERM
+	we.signalMonitoring(ctx)
+
 	if we.Template.Resource.SuccessCondition == "" && we.Template.Resource.FailureCondition == "" {
 		return nil
 	}
@@ -198,6 +228,10 @@ func checkResourceState(resourceNamespace string, resourceName string, successRe
 	}()
 
 	for {
+		if checkIfResourceDeleted(resourceName, resourceNamespace) {
+			return false, errors.Errorf(errors.CodeNotFound, "Resource %s in namespace %s has been deleted somehow.", resourceName, resourceNamespace)
+		}
+
 		jsonBytes, err := readJSON(reader)
 
 		if err != nil {
@@ -223,10 +257,6 @@ func checkResourceState(resourceNamespace string, resourceName string, successRe
 				log.Infof("readJSon failed for resource %s but cmd.Wait for kubectl get -w command did not error", resourceName)
 			}
 			return true, resultErr
-		}
-
-		if checkIfResourceDeleted(resourceName, resourceNamespace) {
-			return false, errors.Errorf(errors.CodeNotFound, "Resource %s in namespace %s has been deleted somehow.", resourceName, resourceNamespace)
 		}
 
 		log.Info(string(jsonBytes))
@@ -297,7 +327,7 @@ func readJSON(reader *bufio.Reader) ([]byte, error) {
 }
 
 // SaveResourceParameters will save any resource output parameters
-func (we *WorkflowExecutor) SaveResourceParameters(resourceNamespace string, resourceName string) error {
+func (we *WorkflowExecutor) SaveResourceParameters(ctx context.Context, resourceNamespace string, resourceName string) error {
 	if len(we.Template.Outputs.Parameters) == 0 {
 		log.Infof("No output parameters")
 		return nil
@@ -305,6 +335,14 @@ func (we *WorkflowExecutor) SaveResourceParameters(resourceNamespace string, res
 	log.Infof("Saving resource output parameters")
 	for i, param := range we.Template.Outputs.Parameters {
 		if param.ValueFrom == nil {
+			continue
+		}
+		if resourceNamespace == "" && resourceName == "" {
+			output := ""
+			if param.ValueFrom.Default != nil {
+				output = param.ValueFrom.Default.String()
+			}
+			we.Template.Outputs.Parameters[i].Value = wfv1.AnyStringPtr(output)
 			continue
 		}
 		var cmd *exec.Cmd
@@ -319,7 +357,7 @@ func (we *WorkflowExecutor) SaveResourceParameters(resourceNamespace string, res
 			if resourceNamespace != "" {
 				resArgs = append(resArgs, "-n", resourceNamespace)
 			}
-			cmdStr := fmt.Sprintf("kubectl get %s -o json | jq -c '%s'", strings.Join(resArgs, " "), param.ValueFrom.JQFilter)
+			cmdStr := fmt.Sprintf("kubectl get %s -o json | jq -rc '%s'", strings.Join(resArgs, " "), param.ValueFrom.JQFilter)
 			cmd = exec.Command("sh", "-c", cmdStr)
 		} else {
 			continue
@@ -329,7 +367,7 @@ func (we *WorkflowExecutor) SaveResourceParameters(resourceNamespace string, res
 		if err != nil {
 			// We have a default value to use instead of returning an error
 			if param.ValueFrom.Default != nil {
-				out = []byte(*param.ValueFrom.Default)
+				out = []byte(param.ValueFrom.Default.String())
 			} else {
 				if exErr, ok := err.(*exec.ExitError); ok {
 					log.Errorf("`%s` stderr:\n%s", cmd.Args, string(exErr.Stderr))
@@ -338,9 +376,9 @@ func (we *WorkflowExecutor) SaveResourceParameters(resourceNamespace string, res
 			}
 		}
 		output := string(out)
-		we.Template.Outputs.Parameters[i].Value = &output
+		we.Template.Outputs.Parameters[i].Value = wfv1.AnyStringPtr(output)
 		log.Infof("Saved output parameter: %s, value: %s", param.Name, output)
 	}
-	err := we.AnnotateOutputs(nil)
+	err := we.AnnotateOutputs(ctx, nil)
 	return err
 }

@@ -14,6 +14,7 @@ import (
 	"upper.io/db.v3/lib/sqlbuilder"
 
 	wfv1 "github.com/argoproj/argo/pkg/apis/workflow/v1alpha1"
+	"github.com/argoproj/argo/util/instanceid"
 )
 
 const archiveTableName = "argo_archived_workflows"
@@ -43,25 +44,33 @@ type archivedWorkflowLabelRecord struct {
 	Value string `db:"value"`
 }
 
+//go:generate mockery -name WorkflowArchive
+
 type WorkflowArchive interface {
 	ArchiveWorkflow(wf *wfv1.Workflow) error
+	// list workflows, with the most recently started workflows at the beginning (i.e. index 0 is the most recent)
 	ListWorkflows(namespace string, minStartAt, maxStartAt time.Time, labelRequirements labels.Requirements, limit, offset int) (wfv1.Workflows, error)
 	GetWorkflow(uid string) (*wfv1.Workflow, error)
 	DeleteWorkflow(uid string) error
-	DeleteWorkflows(ttl time.Duration) error
+	DeleteExpiredWorkflows(ttl time.Duration) error
+	IsEnabled() bool
 }
 
 type workflowArchive struct {
-	session          sqlbuilder.Database
-	clusterName      string
-	managedNamespace string
-	instanceID       string
-	dbType           dbType
+	session           sqlbuilder.Database
+	clusterName       string
+	managedNamespace  string
+	instanceIDService instanceid.Service
+	dbType            dbType
+}
+
+func (r *workflowArchive) IsEnabled() bool {
+	return true
 }
 
 // NewWorkflowArchive returns a new workflowArchive
-func NewWorkflowArchive(session sqlbuilder.Database, clusterName, managedNamespace, instanceID string) WorkflowArchive {
-	return &workflowArchive{session: session, clusterName: clusterName, managedNamespace: managedNamespace, instanceID: instanceID, dbType: dbTypeFor(session)}
+func NewWorkflowArchive(session sqlbuilder.Database, clusterName, managedNamespace string, instanceIDService instanceid.Service) WorkflowArchive {
+	return &workflowArchive{session: session, clusterName: clusterName, managedNamespace: managedNamespace, instanceIDService: instanceIDService, dbType: dbTypeFor(session)}
 }
 
 func (r *workflowArchive) ArchiveWorkflow(wf *wfv1.Workflow) error {
@@ -84,7 +93,7 @@ func (r *workflowArchive) ArchiveWorkflow(wf *wfv1.Workflow) error {
 			Insert(&archivedWorkflowRecord{
 				archivedWorkflowMetadata: archivedWorkflowMetadata{
 					ClusterName: r.clusterName,
-					InstanceID:  r.instanceID,
+					InstanceID:  r.instanceIDService.InstanceID(),
 					UID:         string(wf.UID),
 					Name:        wf.Name,
 					Namespace:   wf.Namespace,
@@ -121,6 +130,14 @@ func (r *workflowArchive) ListWorkflows(namespace string, minStartedAt, maxStart
 	if err != nil {
 		return nil, err
 	}
+
+	// If we were passed 0 as the limit, then we should load all available archived workflows
+	// to match the behavior of the `List` operations in the Kubernetes API
+	if limit == 0 {
+		limit = -1
+		offset = -1
+	}
+
 	err = r.session.
 		Select("name", "namespace", "uid", "phase", "startedat", "finishedat").
 		From(archiveTableName).
@@ -158,7 +175,7 @@ func (r *workflowArchive) clusterManagedNamespaceAndInstanceID() db.Compound {
 	return db.And(
 		db.Cond{"clustername": r.clusterName},
 		namespaceEqual(r.managedNamespace),
-		db.Cond{"instanceid": r.instanceID},
+		db.Cond{"instanceid": r.instanceIDService.InstanceID()},
 	)
 }
 
@@ -220,7 +237,7 @@ func (r *workflowArchive) DeleteWorkflow(uid string) error {
 	return nil
 }
 
-func (r *workflowArchive) DeleteWorkflows(ttl time.Duration) error {
+func (r *workflowArchive) DeleteExpiredWorkflows(ttl time.Duration) error {
 	rs, err := r.session.
 		DeleteFrom(archiveTableName).
 		Where(r.clusterManagedNamespaceAndInstanceID()).
