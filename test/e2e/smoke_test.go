@@ -1,6 +1,9 @@
+// +build e2e
+
 package e2e
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -10,6 +13,7 @@ import (
 
 	wfv1 "github.com/argoproj/argo/pkg/apis/workflow/v1alpha1"
 	"github.com/argoproj/argo/test/e2e/fixtures"
+	"github.com/argoproj/argo/workflow/common"
 )
 
 type SmokeSuite struct {
@@ -21,7 +25,7 @@ func (s *SmokeSuite) TestBasicWorkflow() {
 		Workflow("@smoke/basic.yaml").
 		When().
 		SubmitWorkflow().
-		WaitForWorkflow(20 * time.Second).
+		WaitForWorkflow().
 		Then().
 		ExpectWorkflow(func(t *testing.T, _ *metav1.ObjectMeta, status *wfv1.WorkflowStatus) {
 			assert.Equal(t, wfv1.NodeSucceeded, status.Phase)
@@ -30,12 +34,37 @@ func (s *SmokeSuite) TestBasicWorkflow() {
 		})
 }
 
+func (s *SmokeSuite) TestRunAsNonRootWorkflow() {
+	if s.Config.ContainerRuntimeExecutor == common.ContainerRuntimeExecutorDocker {
+		s.T().Skip("docker not supported")
+	}
+	s.Given().
+		Workflow("@smoke/runasnonroot-workflow.yaml").
+		When().
+		SubmitWorkflow().
+		WaitForWorkflow().
+		Then().
+		ExpectWorkflow(func(t *testing.T, _ *metav1.ObjectMeta, status *wfv1.WorkflowStatus) {
+			assert.Equal(t, wfv1.NodeSucceeded, status.Phase)
+		})
+}
+
 func (s *SmokeSuite) TestArtifactPassing() {
+
+	switch s.Config.ContainerRuntimeExecutor {
+	case common.ContainerRuntimeExecutorKubelet, common.ContainerRuntimeExecutorK8sAPI:
+		s.T().Skip("non-docker not supported")
+	case common.ContainerRuntimeExecutorPNS:
+		if os.Getenv("CI") == "true" {
+			s.T().Skip("non-docker not supported")
+		}
+	}
+
 	s.Given().
 		Workflow("@smoke/artifact-passing.yaml").
 		When().
 		SubmitWorkflow().
-		WaitForWorkflow(45 * time.Second).
+		WaitForWorkflow().
 		Then().
 		ExpectWorkflow(func(t *testing.T, _ *metav1.ObjectMeta, status *wfv1.WorkflowStatus) {
 			assert.Equal(t, wfv1.NodeSucceeded, status.Phase)

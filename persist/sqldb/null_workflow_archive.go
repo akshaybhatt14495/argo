@@ -14,6 +14,10 @@ var NullWorkflowArchive WorkflowArchive = &nullWorkflowArchive{}
 type nullWorkflowArchive struct {
 }
 
+func (r *nullWorkflowArchive) IsEnabled() bool {
+	return false
+}
+
 func (r *nullWorkflowArchive) ArchiveWorkflow(*wfv1.Workflow) error {
 	return nil
 }
@@ -30,6 +34,6 @@ func (r *nullWorkflowArchive) DeleteWorkflow(string) error {
 	return fmt.Errorf("deleting archived workflows not supported")
 }
 
-func (r *nullWorkflowArchive) DeleteWorkflows(time.Duration) error {
+func (r *nullWorkflowArchive) DeleteExpiredWorkflows(time.Duration) error {
 	return nil
 }

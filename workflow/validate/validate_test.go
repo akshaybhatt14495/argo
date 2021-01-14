@@ -1,6 +1,7 @@
 package validate
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -20,8 +21,9 @@ var wftmplGetter = templateresolution.WrapWorkflowTemplateInterface(wfClientset.
 var cwftmplGetter = templateresolution.WrapClusterWorkflowTemplateInterface(wfClientset.ArgoprojV1alpha1().ClusterWorkflowTemplates())
 
 func createWorkflowTemplate(yamlStr string) error {
+	ctx := context.Background()
 	wftmpl := unmarshalWftmpl(yamlStr)
-	_, err := wfClientset.ArgoprojV1alpha1().WorkflowTemplates(metav1.NamespaceDefault).Create(wftmpl)
+	_, err := wfClientset.ArgoprojV1alpha1().WorkflowTemplates(metav1.NamespaceDefault).Create(ctx, wftmpl, metav1.CreateOptions{})
 	if err != nil && apierr.IsAlreadyExists(err) {
 		return nil
 	}
@@ -30,9 +32,14 @@ func createWorkflowTemplate(yamlStr string) error {
 
 // validate is a test helper to accept Workflow YAML as a string and return
 // its validation result.
-func validate(yamlStr string) (*wfv1.WorkflowConditions, error) {
+func validate(yamlStr string) (*wfv1.Conditions, error) {
 	wf := unmarshalWf(yamlStr)
 	return ValidateWorkflow(wftmplGetter, cwftmplGetter, wf, ValidateOpts{})
+}
+
+func validateWithOptions(yamlStr string, opts ValidateOpts) (*wfv1.Conditions, error) {
+	wf := unmarshalWf(yamlStr)
+	return ValidateWorkflow(wftmplGetter, cwftmplGetter, wf, opts)
 }
 
 // validateWorkflowTemplate is a test helper to accept WorkflowTemplate YAML as a string and return
@@ -63,7 +70,7 @@ func unmarshalWftmpl(yamlStr string) *wfv1.WorkflowTemplate {
 
 const invalidErr = "is invalid"
 
-var unknownField = `
+const unknownField = `
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
@@ -165,6 +172,35 @@ spec:
       image: docker/whalesay:{{inputs.parameters.unresolved}}
 `
 
+var unresolvedStepInput = `
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: hello-world-
+spec:
+  entrypoint: entry-step
+  arguments:
+    parameters: []
+  templates:
+    - steps:
+        - - name: a
+            arguments:
+              parameters:
+                - name: message
+                  value: "{{inputs.parameters.message}}"
+            template: whalesay
+      name: entry-step
+      inputs:
+        parameters:
+          - name: message
+            value: hello world
+    - name: whalesay
+      container:
+        image: docker/whalesay
+        command: [cowsay]
+        args: ["{{inputs.parameters.message}}"]
+`
+
 var unresolvedOutput = `
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
@@ -189,6 +225,10 @@ spec:
 
 func TestUnresolved(t *testing.T) {
 	_, err := validate(unresolvedInput)
+	if assert.NotNil(t, err) {
+		assert.Contains(t, err.Error(), "failed to resolve")
+	}
+	_, err = validate(unresolvedStepInput)
 	if assert.NotNil(t, err) {
 		assert.Contains(t, err.Error(), "failed to resolve")
 	}
@@ -1042,7 +1082,6 @@ spec:
 `
 
 func TestValidActiveDeadlineSeconds(t *testing.T) {
-	// ensure {{workflow.status}} is not available when not in exit handler
 	_, err := validate(activeDeadlineSeconds)
 	if assert.NotNil(t, err) {
 		assert.Contains(t, err.Error(), "activeDeadlineSeconds must be a positive integer > 0")
@@ -1205,45 +1244,9 @@ spec:
       args: ["{{inputs.parameters.message}}"]
 `
 
-var invalidWithItems = `
-apiVersion: argoproj.io/v1alpha1
-kind: Workflow
-metadata:
-  generateName: loops-
-spec:
-  entrypoint: loop-example
-  templates:
-  - name: loop-example
-    steps:
-    - - name: print-message
-        template: whalesay
-        arguments:
-          parameters:
-          - name: message
-            value: "{{item}}"
-        withItems:
-        - hello world
-        - goodbye world
-        - [a, b, c]
-
-  - name: whalesay
-    inputs:
-      parameters:
-      - name: message
-    container:
-      image: docker/whalesay:latest
-      command: [cowsay]
-      args: ["{{inputs.parameters.message}}"]
-`
-
 func TestValidWithItems(t *testing.T) {
 	_, err := validate(validWithItems)
 	assert.NoError(t, err)
-
-	_, err = validate(invalidWithItems)
-	if assert.NotNil(t, err) {
-		assert.Contains(t, err.Error(), "withItems")
-	}
 }
 
 var podNameVariable = `
@@ -1675,7 +1678,7 @@ func TestTemplateRef(t *testing.T) {
 	// Ensure that a deprecated SpecWarning was issued
 	foundSpecWarning := false
 	for _, condition := range *wfConditions {
-		if condition.Type == wfv1.WorkflowConditionSpecWarning {
+		if condition.Type == wfv1.ConditionTypeSpecWarning {
 			foundSpecWarning = true
 			break
 		}
@@ -1763,7 +1766,7 @@ func TestDeprecatedNestedTemplateRef(t *testing.T) {
 	// Ensure that a deprecated SpecWarning was issued
 	foundSpecWarning := false
 	for _, condition := range *wfConditions {
-		if condition.Type == wfv1.WorkflowConditionSpecWarning {
+		if condition.Type == wfv1.ConditionTypeSpecWarning {
 			foundSpecWarning = true
 			break
 		}
@@ -1810,7 +1813,7 @@ func TestNestedLocalTemplateRef(t *testing.T) {
 	// Ensure that a deprecated SpecWarning was issued
 	foundSpecWarning := false
 	for _, condition := range *wfConditions {
-		if condition.Type == wfv1.WorkflowConditionSpecWarning {
+		if condition.Type == wfv1.ConditionTypeSpecWarning {
 			foundSpecWarning = true
 			break
 		}
@@ -2317,6 +2320,33 @@ func TestInvalidMetricName(t *testing.T) {
 	assert.EqualError(t, err, "templates.whalesay metric name 'invalid.metric.name' is invalid. Metric names must contain alphanumeric characters, '_', or ':'")
 }
 
+var invalidMetricLabelName = `
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: hello-world-
+spec:
+  entrypoint: whalesay
+  templates:
+  - name: whalesay
+    metrics:
+      prometheus:
+        - name: valid
+          help: "invalid"
+          labels:
+            - key: invalid.key
+              value: hi
+          gauge:
+            value: 1
+    container:
+      image: docker/whalesay:latest
+`
+
+func TestInvalidMetricLabelName(t *testing.T) {
+	_, err := validate(invalidMetricLabelName)
+	assert.EqualError(t, err, "metric label 'invalid.key' is invalid: keys may only contain alphanumeric characters, '_', or ':'")
+}
+
 var invalidMetricHelp = `
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
@@ -2338,4 +2368,562 @@ spec:
 func TestInvalidMetricHelp(t *testing.T) {
 	_, err := validate(invalidMetricHelp)
 	assert.EqualError(t, err, "templates.whalesay metric 'metric_name' must contain a help string under 'help: ' field")
+}
+
+var globalVariables = `
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: global-variables-
+spec:
+  priority: 100
+  entrypoint: test-workflow
+
+  templates:
+  - name: test-workflow
+    steps:
+    - - name: step1
+        template: whalesay
+        arguments:
+          parameters:
+          - name: name
+            value: "{{workflow.name}}"
+          - name: namespace
+            value: "{{workflow.namespace}}"
+          - name: serviceAccountName
+            value: "{{workflow.serviceAccountName}}"
+          - name: uid
+            value: "{{workflow.uid}}"
+          - name: priority
+            value: "{{workflow.priority}}"    
+
+  - name: whalesay
+    inputs:
+      parameters:
+      - name: name
+      - name: namespace
+      - name: serviceAccountName
+      - name: uid
+      - name: priority
+    container:
+      image: docker/whalesay:latest
+      command: [cowsay]
+      args: ["name: {{inputs.parameters.name}} namespace: {{inputs.parameters.namespace}} serviceAccountName: {{inputs.parameters.serviceAccountName}} uid: {{inputs.parameters.uid}} priority: {{inputs.parameters.priority}}"]
+`
+
+func TestWorfklowGlobalVariables(t *testing.T) {
+	_, err := validate(globalVariables)
+	assert.NoError(t, err)
+}
+
+var wfTemplateWithEntrypoint = `
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: template-with-entrypoint
+spec:
+  entrypoint: whalesay-template
+  templates:
+  - name: whalesay-template
+    inputs:
+      parameters:
+      - name: message
+    container:
+      image: docker/whalesay
+      command: [cowsay]
+      args: ["{{inputs.parameters.message}}"]
+`
+
+func TestWorkflowTemplateWithEntrypoint(t *testing.T) {
+	err := validateWorkflowTemplate(wfTemplateWithEntrypoint)
+	assert.NoError(t, err)
+}
+
+var wfWithWFTRefNoEntrypoint = `
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: hello-world-
+  namespace: default
+spec:
+  workflowTemplateRef:
+    name: template-ref-with-entrypoint
+`
+
+var templateWithEntrypoint = `
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: template-ref-with-entrypoint
+  namespace: default
+spec:
+  entrypoint: A
+  templates:
+  - name: A
+    container:
+      image: alpine:latest
+      command: [echo, hello]
+`
+
+func TestWorkflowWithWFTRefWithEntrypoint(t *testing.T) {
+	err := createWorkflowTemplate(templateWithEntrypoint)
+	assert.NoError(t, err)
+	_, err = validate(wfWithWFTRefNoEntrypoint)
+	assert.NoError(t, err)
+}
+
+const wfWithWFTRef = `
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: hello-world-
+spec:
+  entrypoint: A
+  serviceAccountName: argo
+  parallelism: 1
+  volumes:
+  - name: workdir
+    emptyDir: {}
+  podGC:
+    strategy: OnPodSuccess
+  nodeSelector:
+    beta.kubernetes.io/arch: "{{inputs.parameters.arch}}"
+  arguments:
+    parameters:
+    - name: lines-count
+      value: 3
+  workflowTemplateRef:
+    name: template-ref-target
+`
+
+func TestWorkflowWithWFTRef(t *testing.T) {
+	err := createWorkflowTemplate(templateRefTarget)
+	assert.NoError(t, err)
+	_, err = validate(wfWithWFTRef)
+	assert.NoError(t, err)
+}
+
+const invalidWFWithWFTRef = `
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: hello-world-
+spec:
+  entrypoint: A
+  arguments:
+    parameters:
+    - name: lines-count
+      value: 3
+  workflowTemplateRef:
+    name: template-ref-target
+  templates:
+  - name: A
+    container:
+      image: alpine:latest
+      command: [echo, hello]
+`
+
+func TestValidateFieldsWithWFTRef(t *testing.T) {
+	err := createWorkflowTemplate(templateRefTarget)
+	assert.NoError(t, err)
+	_, err = validate(invalidWFWithWFTRef)
+	assert.Error(t, err)
+}
+
+var invalidWfNoImage = `apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: hello-world-right-env-12
+spec:
+  entrypoint: whalesay
+  templates:
+  - name: whalesay
+    container:
+      command:
+      - cowsay
+      args:
+      - hello world
+      env: []`
+
+func TestInvalidWfNoImageField(t *testing.T) {
+	_, err := validate(invalidWfNoImage)
+	assert.EqualError(t, err, "templates.whalesay.container.image may not be empty")
+}
+
+var invalidWfNoImageScript = `apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: hello-world-right-env-12
+spec:
+  entrypoint: whalesay
+  templates:
+  - name: whalesay
+    script:
+      command:
+      - cowsay
+      args:
+      - hello world
+      env: []`
+
+func TestInvalidWfNoImageFieldScript(t *testing.T) {
+	_, err := validate(invalidWfNoImageScript)
+	assert.EqualError(t, err, "templates.whalesay.script.image may not be empty")
+}
+
+var templateRefWithParam = `
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: template-ref-with-param
+spec:
+  entrypoint: A
+  arguments:
+    parameters:
+    - name: some-param
+  templates:
+  - name: A
+    container:
+      image: alpine:latest
+      command: [echo, hello]
+`
+
+var wfWithWFTRefOverrideParam = `
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: hello-world-
+  namespace: default
+spec:
+  arguments:
+    parameters:
+    - name: some-param
+      value: a-value
+  workflowTemplateRef:
+    name: template-ref-with-param
+`
+
+func TestWorkflowWithWFTRefWithOverrideParam(t *testing.T) {
+	err := createWorkflowTemplate(templateRefWithParam)
+	assert.NoError(t, err)
+	_, err = validate(wfWithWFTRefOverrideParam)
+	assert.NoError(t, err)
+}
+
+var dagAndStepLevelOutputArtifacts = `
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: dag-target-
+spec:
+  entrypoint: main
+  templates:
+  - name: main
+    outputs:
+      artifacts:
+        - name: artifact
+          from: "{{tasks.artifact-svn-retrieve.outputs.artifacts.artifact}}"
+    dag:
+      tasks:
+      - name: artifact-svn-retrieve
+        template: artifact-svn-retrieve
+      - name: step-tmpl
+        template: step
+
+  - name: step
+    outputs:
+      artifacts:
+        - name: artifact
+          from: "{{steps.artifact-svn-retrieve.outputs.artifacts.artifact}}"
+    steps:
+    - - name: artifact-svn-retrieve
+        template: artifact-svn-retrieve
+
+  - name: artifact-svn-retrieve
+    outputs:
+      artifacts:
+      - name: artifact
+        path: "/vol/hello_world.txt"
+    container:
+      image: docker/whalesay:latest
+      command: [sh, -c]
+      args: ["sleep 1; cowsay hello world | tee /vol/hello_world.txt"]
+      volumeMounts:
+      - name: vol
+        mountPath: "/vol"
+    volumes:
+    - name: vol
+      emptyDir: {}
+`
+
+func TestDagAndStepLevelOutputArtifactsForDiffExecutor(t *testing.T) {
+	t.Run("DefaultExecutor", func(t *testing.T) {
+		_, err := validateWithOptions(dagAndStepLevelOutputArtifacts, ValidateOpts{ContainerRuntimeExecutor: ""})
+		assert.NoError(t, err)
+	})
+	t.Run("DockerExecutor", func(t *testing.T) {
+		_, err := validateWithOptions(dagAndStepLevelOutputArtifacts, ValidateOpts{ContainerRuntimeExecutor: common.ContainerRuntimeExecutorDocker})
+		assert.NoError(t, err)
+	})
+	t.Run("PNSExecutor", func(t *testing.T) {
+		_, err := validateWithOptions(dagAndStepLevelOutputArtifacts, ValidateOpts{ContainerRuntimeExecutor: common.ContainerRuntimeExecutorPNS})
+		assert.NoError(t, err)
+	})
+	t.Run("K8SExecutor", func(t *testing.T) {
+		_, err := validateWithOptions(dagAndStepLevelOutputArtifacts, ValidateOpts{ContainerRuntimeExecutor: common.ContainerRuntimeExecutorK8sAPI})
+		assert.NoError(t, err)
+	})
+	t.Run("KubeletExecutor", func(t *testing.T) {
+		_, err := validateWithOptions(dagAndStepLevelOutputArtifacts, ValidateOpts{ContainerRuntimeExecutor: common.ContainerRuntimeExecutorKubelet})
+		assert.NoError(t, err)
+	})
+}
+
+var testWorkflowTemplateLabels = `
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  generateName: test-foobar-
+  labels:
+    testLabel: foobar
+spec:
+  entrypoint: whalesay
+  templates:
+    - name: whalesay
+      container:
+        image: docker/whalesay
+      metrics:
+        prometheus:
+          - name: intuit_data_persistplat_dppselfservice_workflow_test_duration
+            help: Duration of workflow
+            labels:
+              - key: label
+                value: "{{workflow.labels.testLabel}}"
+            gauge:
+              realtime: true
+              value: "{{duration}}"
+`
+
+func TestWorkflowTemplateLabels(t *testing.T) {
+	err := validateWorkflowTemplate(testWorkflowTemplateLabels)
+	assert.NoError(t, err)
+}
+
+const templateRefWithArtifactArgument = `
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: template-ref-with-artifact
+spec:
+  entrypoint: A
+  arguments:
+    artifacts:
+    - name: binary-file
+      http:
+        url: https://a.server.io/file
+  templates:
+  - name: A
+    inputs:
+      artifacts:
+      - name: binary-file
+        path: /usr/local/bin/binfile
+        mode: 0755
+    container:
+      image: alpine:latest
+      command: [echo, hello]
+`
+
+const wfWithWFTRefAndNoOwnArtifact = `
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: hello-world-
+  namespace: default
+spec:
+  workflowTemplateRef:
+    name: template-ref-with-artifact
+`
+
+func TestWorkflowWithWFTRefWithOutOwnArtifactArgument(t *testing.T) {
+	err := createWorkflowTemplate(templateRefWithArtifactArgument)
+	assert.NoError(t, err)
+	_, err = validate(wfWithWFTRefAndNoOwnArtifact)
+	assert.NoError(t, err)
+}
+
+const wfWithWFTRefAndOwnArtifactArgument = `
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: hello-world-
+  namespace: default
+spec:
+  arguments:
+    artifacts:
+    - name: binary-file
+      http:
+        url: http://localserver/file
+  workflowTemplateRef:
+    name: template-ref-with-artifact
+`
+
+func TestWorkflowWithWFTRefWithArtifactArgument(t *testing.T) {
+	err := createWorkflowTemplate(templateRefWithArtifactArgument)
+	assert.NoError(t, err)
+	_, err = validate(wfWithWFTRefAndOwnArtifactArgument)
+	assert.NoError(t, err)
+}
+
+var workflowTeamplateWithEnumValues = `
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  generateName: test-enum-1-
+  labels:
+    testLabel: foobar
+spec:
+  entrypoint: argosay
+  arguments:
+    parameters:
+      - name: message
+        value: one
+        enum:
+            - one
+            - two
+            - three
+  templates:
+    - name: argosay
+      inputs:
+        parameters:
+          - name: message
+            value: '{{workflow.parameters.message}}'
+      container:
+        name: main
+        image: 'argoproj/argosay:v2'
+        command:
+          - /argosay
+        args:
+          - echo
+          - '{{inputs.parameters.message}}'
+`
+
+var workflowTemplateWithEmptyEnumList = `
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  generateName: test-enum-1-
+  labels:
+    testLabel: foobar
+spec:
+  entrypoint: argosay
+  arguments:
+    parameters:
+      - name: message
+        value: one
+        enum: []
+  templates:
+    - name: argosay
+      inputs:
+        parameters:
+          - name: message
+            value: '{{workflow.parameters.message}}'
+      container:
+        name: main
+        image: 'argoproj/argosay:v2'
+        command:
+          - /argosay
+        args:
+          - echo
+          - '{{inputs.parameters.message}}'
+`
+
+var workflowTemplateWithArgumentValueNotFromEnumList = `
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  generateName: test-enum-1-
+  labels:
+    testLabel: foobar
+spec:
+  entrypoint: argosay
+  arguments:
+    parameters:
+      - name: message
+        value: one
+        enum:
+            -   two
+            -   three
+            -   four
+  templates:
+    - name: argosay
+      inputs:
+        parameters:
+          - name: message
+            value: '{{workflow.parameters.message}}'
+      container:
+        name: main
+        image: 'argoproj/argosay:v2'
+        command:
+          - /argosay
+        args:
+          - echo
+          - '{{inputs.parameters.message}}'
+`
+
+func TestWorkflowTemplateWithEnumValue(t *testing.T) {
+	err := validateWorkflowTemplate(workflowTeamplateWithEnumValues)
+	assert.NoError(t, err)
+}
+
+func TestWorkflowTemplateWithEmptyEnumList(t *testing.T) {
+	err := validateWorkflowTemplate(workflowTemplateWithEmptyEnumList)
+	assert.EqualError(t, err, "spec.arguments.message.enum should contain at least one value")
+}
+
+func TestWorkflowTemplateWithArgumentValueNotFromEnumList(t *testing.T) {
+	err := validateWorkflowTemplate(workflowTemplateWithArgumentValueNotFromEnumList)
+	assert.EqualError(t, err, "spec.arguments.message.value should be present in spec.arguments.message.enum list")
+}
+
+var validActiveDeadlineSecondsArgoVariable = `
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: timeout-bug-
+spec:
+  entrypoint: main
+
+  templates:
+    - name: main
+      dag:
+        tasks:
+          - name: print-timeout
+            template: print-timeout
+          - name: use-timeout
+            template: use-timeout
+            dependencies: [print-timeout]
+            arguments:
+              parameters:
+                - name: timeout
+                  value: "{{tasks.print-timeout.outputs.result}}"
+
+    - name: print-timeout
+      container:
+        image: alpine
+        command: [sh, -c]
+        args: ['echo 5']
+
+    - name: use-timeout
+      inputs:
+        parameters:
+          - name: timeout
+      activeDeadlineSeconds: "{{inputs.parameters.timeout}}"
+      container:
+        image: alpine
+        command: [sh, -c]
+        args: ["echo sleeping for 1m; sleep 60; echo done"]
+`
+
+func TestValidActiveDeadlineSecondsArgoVariable(t *testing.T) {
+	err := validateWorkflowTemplate(validActiveDeadlineSecondsArgoVariable)
+	assert.NoError(t, err)
 }

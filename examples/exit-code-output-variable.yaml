@@ -16,9 +16,10 @@ spec:
             arguments:
               parameters:
                 - name: exitCode
-                  value: "{{steps.failing-container.outputs.exitCode}}"
+                  value: "{{steps.failing-container.exitCode}}"
+
     - name: failing-container
-      script:
+      container:
         image: alpine:3.6
         command: [sh, -c]
         args: ["exit 123"]

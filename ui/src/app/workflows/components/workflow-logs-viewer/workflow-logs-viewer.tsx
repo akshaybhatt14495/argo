@@ -1,7 +1,10 @@
 import * as React from 'react';
 
+import {Observable, Subscription} from 'rxjs';
 import * as models from '../../../../models';
+import {ErrorNotice} from '../../../shared/components/error-notice';
 import {services} from '../../../shared/services';
+import {FullHeightLogsViewer} from './full-height-logs-viewer';
 
 require('./workflow-logs-viewer.scss');
 
@@ -14,39 +17,30 @@ interface WorkflowLogsViewerProps {
 
 interface WorkflowLogsViewerState {
     error?: Error;
-    lines: string[];
+    loaded: boolean;
+    lineCount: number;
+}
+
+function identity<T>(value: T) {
+    return () => value;
 }
 
 export class WorkflowLogsViewer extends React.Component<WorkflowLogsViewerProps, WorkflowLogsViewerState> {
-    private logCoda: HTMLElement;
+    private subscription: Subscription | null = null;
+    private logsObservable?: Observable<string>;
 
     constructor(props: WorkflowLogsViewerProps) {
         super(props);
-        this.state = {lines: []};
+
+        this.state = {lineCount: 0, loaded: false};
     }
 
     public componentDidMount(): void {
-        services.workflows.getContainerLogs(this.props.workflow, this.props.nodeId, this.props.container, this.props.archived).subscribe(
-            log => {
-                if (log) {
-                    this.setState(state => {
-                        log.split('\n').forEach(line => {
-                            state.lines.push(line);
-                        });
-                        return state;
-                    });
-                }
-            },
-            error => {
-                this.setState({error});
-            }
-        );
+        this.refreshStream();
     }
 
-    public componentDidUpdate() {
-        if (this.logCoda) {
-            this.logCoda.scrollIntoView({behavior: 'auto'});
-        }
+    public componentWillUnmount(): void {
+        this.ensureUnsubscribed();
     }
 
     public render() {
@@ -55,41 +49,35 @@ export class WorkflowLogsViewer extends React.Component<WorkflowLogsViewerProps,
                 <h3>Logs</h3>
                 {this.props.archived && (
                     <p>
-                        <i className='fa fa-exclamation-triangle' /> Logs for archived workflows maybe overwritten by a more recent workflow with the same name.
+                        <i className='fa fa-exclamation-triangle' /> Logs for archived workflows may be overwritten by a more recent workflow with the same name.
                     </p>
                 )}
                 <p>
                     <i className='fa fa-box' /> {this.props.nodeId}/{this.props.container}
-                    {this.state.lines.length > 0 && <small className='muted'> {this.state.lines.length} line(s)</small>}
+                    {this.state.lineCount > 0 && <small className='muted'> {this.state.lineCount} line(s)</small>}
                 </p>
+
+                {this.state.error && <ErrorNotice error={this.state.error} onReload={() => this.refreshStream()} />}
                 <div className='white-box'>
-                    {this.state.error && (
-                        <p>
-                            <i className='fa fa-exclamation-triangle status-icon--failed' /> Failed to load logs: {this.state.error.message}
-                        </p>
-                    )}
-                    {!this.state.error && this.state.lines.length === 0 && this.isCurrentNodeRunningOrPending() && (
+                    {this.isWaitingForData() && (
                         <p>
                             <i className='fa fa-circle-notch fa-spin' /> Waiting for data...
                         </p>
                     )}
-                    {!this.state.error && this.state.lines.length === 0 && !this.isCurrentNodeRunningOrPending() && <p>Pod did not output any logs.</p>}
-                    {this.state.lines.length > 0 && (
+                    {!this.state.error && this.podHasNoLogs() && <p>Pod did not output any logs.</p>}
+                    {this.state.lineCount > 0 && this.logsObservable && (
                         <div className='log-box'>
-                            <i className='fa fa-chevron-down' />
-                            <br />
-                            {this.state.lines.join('\n\r')}
-                            <br />
-                            <i
-                                className='fa fa-chevron-up'
-                                ref={el => {
-                                    this.logCoda = el;
+                            <FullHeightLogsViewer
+                                source={{
+                                    key: `${this.props.workflow.metadata.name}-${this.props.container}`,
+                                    loadLogs: identity(this.logsObservable),
+                                    shouldRepeat: () => false
                                 }}
                             />
                         </div>
                     )}
                 </div>
-                {this.state.lines.length === 0 && (
+                {this.state.lineCount === 0 && (
                     <p>
                         Still waiting for data or an error? Try getting{' '}
                         <a href={services.workflows.getArtifactLogsUrl(this.props.workflow, this.props.nodeId, this.props.container, this.props.archived)}>
@@ -100,6 +88,41 @@ export class WorkflowLogsViewer extends React.Component<WorkflowLogsViewerProps,
                 )}
             </div>
         );
+    }
+
+    private ensureUnsubscribed() {
+        if (this.subscription) {
+            this.subscription.unsubscribe();
+        }
+        this.subscription = null;
+    }
+
+    private refreshStream(): void {
+        this.ensureUnsubscribed();
+
+        this.setState({lineCount: 0, loaded: false, error: undefined});
+
+        const source = services.workflows.getContainerLogs(this.props.workflow, this.props.nodeId, this.props.container, this.props.archived).map(line => line + '\n');
+
+        this.logsObservable = source.publishReplay().refCount();
+        this.subscription = this.logsObservable.subscribe(
+            log => {
+                this.setState(state => {
+                    return {...state, lineCount: state.lineCount + 1};
+                });
+            },
+            error => {
+                this.setState({error, loaded: true});
+            }
+        );
+    }
+
+    private podHasNoLogs() {
+        return !this.isWaitingForData() && this.state.lineCount === 0;
+    }
+
+    private isWaitingForData() {
+        return this.state.lineCount === 0 && (this.isCurrentNodeRunningOrPending() || !this.state.loaded);
     }
 
     private isCurrentNodeRunningOrPending(): boolean {

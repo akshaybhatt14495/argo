@@ -3,7 +3,6 @@ package logs
 import (
 	"bufio"
 	"context"
-	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -11,6 +10,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
+	apierr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
@@ -40,7 +40,7 @@ type sender interface {
 func WorkflowLogs(ctx context.Context, wfClient versioned.Interface, kubeClient kubernetes.Interface, req request, sender sender) error {
 
 	wfInterface := wfClient.ArgoprojV1alpha1().Workflows(req.GetNamespace())
-	_, err := wfInterface.Get(req.GetName(), metav1.GetOptions{})
+	_, err := wfInterface.Get(ctx, req.GetName(), metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -65,8 +65,15 @@ func WorkflowLogs(ctx context.Context, wfClient versioned.Interface, kubeClient 
 	var wg sync.WaitGroup
 	// A non-blocking channel for log entries to go down.
 	unsortedEntries := make(chan logEntry, 128)
-	logOptions := req.GetLogOptions().DeepCopy()
-	logOptions.Timestamps = true
+	logOptions := req.GetLogOptions()
+	if logOptions == nil {
+		logOptions = &corev1.PodLogOptions{}
+	}
+	logCtx.WithField("options", logOptions).Debug("Log options")
+
+	// make a copy of requested log options and set timestamps to true, so they can be parsed out later
+	podLogStreamOptions := *logOptions
+	podLogStreamOptions.Timestamps = true
 
 	// this func start a stream if one is not already running
 	ensureWeAreStreaming := func(pod *corev1.Pod) {
@@ -81,7 +88,7 @@ func WorkflowLogs(ctx context.Context, wfClient versioned.Interface, kubeClient 
 				defer wg.Done()
 				logCtx.Debug("Streaming pod logs")
 				defer logCtx.Debug("Pod logs stream done")
-				stream, err := podInterface.GetLogs(podName, logOptions).Stream()
+				stream, err := podInterface.GetLogs(podName, &podLogStreamOptions).Stream(ctx)
 				if err != nil {
 					logCtx.Error(err)
 					return
@@ -94,12 +101,15 @@ func WorkflowLogs(ctx context.Context, wfClient versioned.Interface, kubeClient 
 					default:
 						line := scanner.Text()
 						parts := strings.SplitN(line, " ", 2)
+						content := parts[1]
 						timestamp, err := time.Parse(time.RFC3339, parts[0])
 						if err != nil {
-							logCtx.Error(err)
-							return
+							logCtx.Errorf("unable to decode or infer timestamp from log line: %s", err)
+							// The current timestamp is the next best substitute. This won't be shown, but will be used
+							// for sorting
+							timestamp = time.Now()
+							content = line
 						}
-						content := parts[1]
 						// You might ask - why don't we let the client do this? Well, it is because
 						// this is the same as how this works for `kubectl logs`
 						if req.GetLogOptions().Timestamps {
@@ -115,7 +125,7 @@ func WorkflowLogs(ctx context.Context, wfClient versioned.Interface, kubeClient 
 		}
 	}
 
-	podWatch, err := podInterface.Watch(podListOptions)
+	podWatch, err := podInterface.Watch(ctx, podListOptions)
 	if err != nil {
 		return err
 	}
@@ -123,7 +133,7 @@ func WorkflowLogs(ctx context.Context, wfClient versioned.Interface, kubeClient 
 
 	// only list after we start the watch
 	logCtx.Debug("Listing workflow pods")
-	list, err := podInterface.List(podListOptions)
+	list, err := podInterface.List(ctx, podListOptions)
 	if err != nil {
 		return err
 	}
@@ -137,9 +147,9 @@ func WorkflowLogs(ctx context.Context, wfClient versioned.Interface, kubeClient 
 		ensureWeAreStreaming(&pod)
 	}
 
-	if req.GetLogOptions().Follow {
-		wfListOptions := metav1.ListOptions{FieldSelector: "metadata.name=" + req.GetName()}
-		wfWatch, err := wfInterface.Watch(wfListOptions)
+	if logOptions.Follow {
+		wfListOptions := metav1.ListOptions{FieldSelector: "metadata.name=" + req.GetName(), ResourceVersion: "0"}
+		wfWatch, err := wfInterface.Watch(ctx, wfListOptions)
 		if err != nil {
 			return err
 		}
@@ -160,20 +170,23 @@ func WorkflowLogs(ctx context.Context, wfClient versioned.Interface, kubeClient 
 					return
 				case event, open := <-wfWatch.ResultChan():
 					if !open {
-						logCtx.Info("Re-establishing workflow watch")
-						wfWatch, err = wfInterface.Watch(wfListOptions)
+						logCtx.Debug("Re-establishing workflow watch")
+						wfWatch.Stop()
+						wfWatch, err = wfInterface.Watch(ctx, wfListOptions)
 						if err != nil {
 							logCtx.Error(err)
 							return
 						}
+						continue
 					}
 					wf, ok := event.Object.(*wfv1.Workflow)
 					if !ok {
-						logCtx.Errorf("watch object was not a workflow %v", reflect.TypeOf(event.Object))
+						// object is probably probably metav1.Status
+						logCtx.WithError(apierr.FromObject(event.Object)).Warn("watch object was not a workflow")
 						return
 					}
-					logCtx.WithFields(log.Fields{"eventType": event.Type, "completed": wf.Status.Completed()}).Debug("Workflow event")
-					if event.Type == watch.Deleted || wf.Status.Completed() {
+					logCtx.WithFields(log.Fields{"eventType": event.Type, "completed": wf.Status.Fulfilled()}).Debug("Workflow event")
+					if event.Type == watch.Deleted || wf.Status.Fulfilled() {
 						return
 					}
 				}
@@ -193,21 +206,25 @@ func WorkflowLogs(ctx context.Context, wfClient versioned.Interface, kubeClient 
 				case event, open := <-podWatch.ResultChan():
 					if !open {
 						logCtx.Info("Re-establishing pod watch")
-						podWatch, err = podInterface.Watch(podListOptions)
+						podWatch.Stop()
+						podWatch, err = podInterface.Watch(ctx, podListOptions)
 						if err != nil {
 							logCtx.Error(err)
 							return
 						}
+						continue
 					}
 					pod, ok := event.Object.(*corev1.Pod)
 					if !ok {
-						logCtx.Errorf("watch object was not a pod %v", reflect.TypeOf(event.Object))
+						// object is probably probably metav1.Status
+						logCtx.WithError(apierr.FromObject(event.Object)).Warn("watch object was not a pod")
 						return
 					}
 					logCtx.WithFields(log.Fields{"eventType": event.Type, "podName": pod.GetName(), "phase": pod.Status.Phase}).Debug("Pod event")
 					if pod.Status.Phase == corev1.PodRunning {
 						ensureWeAreStreaming(pod)
 					}
+					podListOptions.ResourceVersion = pod.ResourceVersion
 				}
 			}
 		}()

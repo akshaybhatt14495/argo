@@ -1,14 +1,14 @@
 import * as React from 'react';
 
 import {WorkflowTemplate} from '../../../models';
+import {ExampleManifests} from '../../shared/components/example-manifests';
+import {ResourceEditor} from '../../shared/components/resource-editor/resource-editor';
 import {Timestamp} from '../../shared/components/timestamp';
-import {YamlEditor} from '../../shared/components/yaml/yaml-editor';
 import {services} from '../../shared/services';
 
 interface Props {
     template: WorkflowTemplate;
     onChange: (template: WorkflowTemplate) => void;
-    onError: (error: Error) => void;
 }
 
 export const ClusterWorkflowTemplateSummaryPanel = (props: Props) => {
@@ -31,16 +31,17 @@ export const ClusterWorkflowTemplateSummaryPanel = (props: Props) => {
 
             <div className='white-box'>
                 <div className='white-box__details'>
-                    <YamlEditor
-                        editing={false}
+                    <ResourceEditor
+                        kind='ClusterWorkflowTemplate'
+                        title='Update Cluster Workflow Template'
                         value={props.template}
-                        onSubmit={(value: WorkflowTemplate) => {
-                            return services.clusterWorkflowTemplate
-                                .update(value, props.template.metadata.name)
-                                .then(clusterWorkflowTemplate => props.onChange(clusterWorkflowTemplate))
-                                .catch(err => props.onError(err));
-                        }}
+                        onSubmit={(value: WorkflowTemplate) =>
+                            services.clusterWorkflowTemplate.update(value, props.template.metadata.name).then(clusterWorkflowTemplate => props.onChange(clusterWorkflowTemplate))
+                        }
                     />
+                    <p>
+                        <ExampleManifests />
+                    </p>
                 </div>
             </div>
         </div>

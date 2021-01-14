@@ -1,24 +1,25 @@
 package util
 
 import (
+	"context"
 	"encoding/json"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/ghodss/yaml"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	kubefake "k8s.io/client-go/kubernetes/fake"
+	"sigs.k8s.io/yaml"
 
-	"github.com/argoproj/argo/persist/sqldb"
-	"github.com/argoproj/argo/persist/sqldb/mocks"
+	"github.com/argoproj/argo/pkg/apis/workflow"
 	wfv1 "github.com/argoproj/argo/pkg/apis/workflow/v1alpha1"
-	fakeClientset "github.com/argoproj/argo/pkg/client/clientset/versioned/fake"
-	"github.com/argoproj/argo/workflow/packer"
+	argofake "github.com/argoproj/argo/pkg/client/clientset/versioned/fake"
+	"github.com/argoproj/argo/workflow/common"
+	hydratorfake "github.com/argoproj/argo/workflow/hydrator/fake"
 )
 
 // TestSubmitDryRun
@@ -41,8 +42,9 @@ spec:
 `
 	wf := unmarshalWF(workflowYaml)
 	newWf := wf.DeepCopy()
-	wfClientSet := fakeClientset.NewSimpleClientset()
-	newWf, err := SubmitWorkflow(nil, wfClientSet, "test-namespace", newWf, &wfv1.SubmitOpts{DryRun: true})
+	wfClientSet := argofake.NewSimpleClientset()
+	ctx := context.Background()
+	newWf, err := SubmitWorkflow(ctx, nil, wfClientSet, "test-namespace", newWf, &wfv1.SubmitOpts{DryRun: true})
 	assert.NoError(t, err)
 	assert.Equal(t, wf.Spec, newWf.Spec)
 	assert.Equal(t, wf.Status, newWf.Status)
@@ -176,6 +178,15 @@ func unmarshalWF(yamlStr string) *wfv1.Workflow {
 	return &wf
 }
 
+func unmarshalWFT(yamlStr string) *wfv1.WorkflowTemplate {
+	var wft wfv1.WorkflowTemplate
+	err := yaml.Unmarshal([]byte(yamlStr), &wft)
+	if err != nil {
+		panic(err)
+	}
+	return &wft
+}
+
 var yamlStr = `
 containers:
   - name: main
@@ -279,77 +290,338 @@ status:
   startedAt: "2020-04-10T15:21:23Z"
 `
 
-func TestResumeWorkflowCompressed(t *testing.T) {
-	wfIf := fakeClientset.NewSimpleClientset().ArgoprojV1alpha1().Workflows("")
+func TestResumeWorkflowByNodeName(t *testing.T) {
+	wfIf := argofake.NewSimpleClientset().ArgoprojV1alpha1().Workflows("")
 	origWf := unmarshalWF(suspendedWf)
 
-	clearFunc := packer.SetMaxWorkflowSize(1156)
-	defer clearFunc()
-	err := packer.CompressWorkflowIfNeeded(origWf)
+	ctx := context.Background()
+	_, err := wfIf.Create(ctx, origWf, metav1.CreateOptions{})
 	assert.NoError(t, err)
 
-	_, err = wfIf.Create(origWf)
+	//will return error as displayName does not match any nodes
+	err = ResumeWorkflow(ctx, wfIf, hydratorfake.Noop, "suspend", "displayName=nonexistant")
+	assert.Error(t, err)
+
+	//displayName didn't match suspend node so should still be running
+	wf, err := wfIf.Get(ctx, "suspend", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.Equal(t, wfv1.NodeRunning, wf.Status.Nodes.FindByDisplayName("approve").Phase)
+
+	err = ResumeWorkflow(ctx, wfIf, hydratorfake.Noop, "suspend", "displayName=approve")
 	assert.NoError(t, err)
 
-	err = ResumeWorkflow(wfIf, sqldb.ExplosiveOffloadNodeStatusRepo, "suspend", "")
-	assert.NoError(t, err)
-
-	wf, err := wfIf.Get("suspend", metav1.GetOptions{})
-	assert.NoError(t, err)
-	assert.NotEmpty(t, wf.Status.CompressedNodes)
+	//displayName matched node so has succeeded
+	wf, err = wfIf.Get(ctx, "suspend", metav1.GetOptions{})
+	if assert.NoError(t, err) {
+		assert.Equal(t, wfv1.NodeSucceeded, wf.Status.Nodes.FindByDisplayName("approve").Phase)
+	}
 }
 
-func TestResumeWorkflowOffloaded(t *testing.T) {
-	wfIf := fakeClientset.NewSimpleClientset().ArgoprojV1alpha1().Workflows("")
+func TestStopWorkflowByNodeName(t *testing.T) {
+	wfIf := argofake.NewSimpleClientset().ArgoprojV1alpha1().Workflows("")
 	origWf := unmarshalWF(suspendedWf)
 
-	origNodes := origWf.Status.Nodes
-
-	origWf.Status.Nodes = nil
-	origWf.Status.OffloadNodeStatusVersion = "123"
-
-	_, err := wfIf.Create(origWf)
+	ctx := context.Background()
+	_, err := wfIf.Create(ctx, origWf, metav1.CreateOptions{})
 	assert.NoError(t, err)
 
-	offloadNodeStatusRepo := &mocks.OffloadNodeStatusRepo{}
-	offloadNodeStatusRepo.On("IsEnabled", mock.Anything).Return(true)
-	offloadNodeStatusRepo.On("Get", "4f08d325-dc5a-43a3-9986-259e259e6ea3", "123").Return(origNodes, nil)
-	offloadNodeStatusRepo.On("Save", "4f08d325-dc5a-43a3-9986-259e259e6ea3", mock.Anything, mock.Anything).Return("1234", nil)
+	//will return error as displayName does not match any nodes
+	err = StopWorkflow(ctx, wfIf, hydratorfake.Noop, "suspend", "displayName=nonexistant", "error occurred")
+	assert.Error(t, err)
 
-	err = ResumeWorkflow(wfIf, offloadNodeStatusRepo, "suspend", "")
+	//displayName didn't match suspend node so should still be running
+	wf, err := wfIf.Get(ctx, "suspend", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.Equal(t, wfv1.NodeRunning, wf.Status.Nodes.FindByDisplayName("approve").Phase)
+
+	err = StopWorkflow(ctx, wfIf, hydratorfake.Noop, "suspend", "displayName=approve", "error occurred")
 	assert.NoError(t, err)
 
-	wf, err := wfIf.Get("suspend", metav1.GetOptions{})
+	//displayName matched node so has succeeded
+	wf, err = wfIf.Get(ctx, "suspend", metav1.GetOptions{})
 	assert.NoError(t, err)
-	assert.Equal(t, "1234", wf.Status.OffloadNodeStatusVersion)
+	assert.Equal(t, wfv1.NodeFailed, wf.Status.Nodes.FindByDisplayName("approve").Phase)
 }
 
-var failedWf = `
+var susWorkflow = `
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
-  creationTimestamp: "2020-04-10T15:35:59Z"
-  generation: 5
-  labels:
-    workflows.argoproj.io/completed: "true"
-    workflows.argoproj.io/phase: Failed
-  name: fail-template
-  resourceVersion: "240144"
-  selfLink: /apis/argoproj.io/v1alpha1/namespaces/argo/workflows/fail-template
-  uid: 7e74dbb9-d681-4c22-9bed-a581ec28383f
+  name: suspend-template
 spec:
   arguments: {}
-  entrypoint: fail
+  entrypoint: suspend
   templates:
   - arguments: {}
     inputs: {}
     metadata: {}
-    name: fail
+    name: suspend
     outputs: {}
     steps:
     - - arguments: {}
         name: approve
         template: approve
+    - - arguments:
+          parameters:
+          - name: message
+            value: '{{steps.approve.outputs.parameters.message}}'
+        name: release
+        template: whalesay
+  - arguments: {}
+    inputs: {}
+    metadata: {}
+    name: approve
+    outputs:
+      parameters:
+      - name: message
+        valueFrom:
+          supplied: {}
+    suspend: {}
+  - arguments: {}
+    container:
+      args:
+      - '{{inputs.parameters.message}}'
+      command:
+      - cowsay
+      image: docker/whalesay
+      name: ""
+      resources: {}
+    inputs:
+      parameters:
+      - name: message
+    metadata: {}
+    name: whalesay
+    outputs: {}
+status:
+  finishedAt: null
+  nodes:
+    suspend-template-kgfn7:
+      children:
+      - suspend-template-kgfn7-1405476480
+      displayName: suspend-template-kgfn7
+      finishedAt: null
+      id: suspend-template-kgfn7
+      name: suspend-template-kgfn7
+      phase: Running
+      startedAt: "2020-06-25T18:01:56Z"
+      templateName: suspend
+      templateScope: local/suspend-template-kgfn7
+      type: Steps
+    suspend-template-kgfn7-1405476480:
+      boundaryID: suspend-template-kgfn7
+      children:
+      - suspend-template-kgfn7-2667278707
+      displayName: '[0]'
+      finishedAt: null
+      id: suspend-template-kgfn7-1405476480
+      name: suspend-template-kgfn7[0]
+      phase: Running
+      startedAt: "2020-06-25T18:01:56Z"
+      templateName: suspend
+      templateScope: local/suspend-template-kgfn7
+      type: StepGroup
+    suspend-template-kgfn7-2667278707:
+      boundaryID: suspend-template-kgfn7
+      displayName: approve
+      finishedAt: null
+      id: suspend-template-kgfn7-2667278707
+      name: suspend-template-kgfn7[0].approve
+      outputs:
+        parameters:
+        - name: message
+          valueFrom:
+            supplied: {}
+      phase: Running
+      startedAt: "2020-06-25T18:01:56Z"
+      templateName: approve
+      templateScope: local/suspend-template-kgfn7
+      type: Suspend
+  phase: Running
+  startedAt: "2020-06-25T18:01:56Z"
+`
+
+func TestUpdateSuspendedNode(t *testing.T) {
+	wfIf := argofake.NewSimpleClientset().ArgoprojV1alpha1().Workflows("")
+	origWf := unmarshalWF(susWorkflow)
+
+	ctx := context.Background()
+	_, err := wfIf.Create(ctx, origWf, metav1.CreateOptions{})
+	if assert.NoError(t, err) {
+		err = updateSuspendedNode(ctx, wfIf, hydratorfake.Noop, "does-not-exist", "displayName=approve", SetOperationValues{OutputParameters: map[string]string{"message": "Hello World"}})
+		assert.EqualError(t, err, "workflows.argoproj.io \"does-not-exist\" not found")
+		err = updateSuspendedNode(ctx, wfIf, hydratorfake.Noop, "suspend-template", "displayName=does-not-exists", SetOperationValues{OutputParameters: map[string]string{"message": "Hello World"}})
+		assert.EqualError(t, err, "currently, set only targets suspend nodes: no suspend nodes matching nodeFieldSelector: displayName=does-not-exists")
+		err = updateSuspendedNode(ctx, wfIf, hydratorfake.Noop, "suspend-template", "displayName=approve", SetOperationValues{OutputParameters: map[string]string{"does-not-exist": "Hello World"}})
+		assert.EqualError(t, err, "node is not expecting output parameter 'does-not-exist'")
+		err = updateSuspendedNode(ctx, wfIf, hydratorfake.Noop, "suspend-template", "displayName=approve", SetOperationValues{OutputParameters: map[string]string{"message": "Hello World"}})
+		assert.NoError(t, err)
+	}
+
+	noSpaceWf := unmarshalWF(susWorkflow)
+	noSpaceWf.Name = "suspend-template-no-outputs"
+	node := noSpaceWf.Status.Nodes["suspend-template-kgfn7-2667278707"]
+	node.Outputs = nil
+	noSpaceWf.Status.Nodes["suspend-template-kgfn7-2667278707"] = node
+	_, err = wfIf.Create(ctx, noSpaceWf, metav1.CreateOptions{})
+	if assert.NoError(t, err) {
+		err = updateSuspendedNode(ctx, wfIf, hydratorfake.Noop, "suspend-template-no-outputs", "displayName=approve", SetOperationValues{OutputParameters: map[string]string{"message": "Hello World"}})
+		assert.EqualError(t, err, "cannot set output parameters because node is not expecting any raw parameters")
+	}
+}
+
+func TestGetNodeType(t *testing.T) {
+	t.Run("getNodeType", func(t *testing.T) {
+		assert.Equal(t, wfv1.NodeTypePod, GetNodeType(&wfv1.Template{Script: &wfv1.ScriptTemplate{}}))
+		assert.Equal(t, wfv1.NodeTypePod, GetNodeType(&wfv1.Template{Container: &v1.Container{}}))
+		assert.Equal(t, wfv1.NodeTypePod, GetNodeType(&wfv1.Template{Resource: &wfv1.ResourceTemplate{}}))
+		assert.NotEqual(t, wfv1.NodeTypePod, GetNodeType(&wfv1.Template{Steps: []wfv1.ParallelSteps{}}))
+		assert.NotEqual(t, wfv1.NodeTypePod, GetNodeType(&wfv1.Template{DAG: &wfv1.DAGTemplate{}}))
+		assert.NotEqual(t, wfv1.NodeTypePod, GetNodeType(&wfv1.Template{Suspend: &wfv1.SuspendTemplate{}}))
+	})
+}
+
+func TestApplySubmitOpts(t *testing.T) {
+	t.Run("Nil", func(t *testing.T) {
+		assert.NoError(t, ApplySubmitOpts(&wfv1.Workflow{}, nil))
+	})
+	t.Run("InvalidLabels", func(t *testing.T) {
+		assert.Error(t, ApplySubmitOpts(&wfv1.Workflow{}, &wfv1.SubmitOpts{Labels: "a"}))
+	})
+	t.Run("Labels", func(t *testing.T) {
+		wf := &wfv1.Workflow{}
+		err := ApplySubmitOpts(wf, &wfv1.SubmitOpts{Labels: "a=1,b=1"})
+		assert.NoError(t, err)
+		assert.Len(t, wf.GetLabels(), 2)
+	})
+	t.Run("MergeLabels", func(t *testing.T) {
+		wf := &wfv1.Workflow{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"a": "0", "b": "0"}}}
+		err := ApplySubmitOpts(wf, &wfv1.SubmitOpts{Labels: "a=1"})
+		assert.NoError(t, err)
+		if assert.Len(t, wf.GetLabels(), 2) {
+			assert.Equal(t, "1", wf.GetLabels()["a"])
+			assert.Equal(t, "0", wf.GetLabels()["b"])
+		}
+	})
+	t.Run("InvalidParameters", func(t *testing.T) {
+		assert.Error(t, ApplySubmitOpts(&wfv1.Workflow{}, &wfv1.SubmitOpts{Parameters: []string{"a"}}))
+	})
+	t.Run("Parameters", func(t *testing.T) {
+		wf := &wfv1.Workflow{
+			Spec: wfv1.WorkflowSpec{
+				Arguments: wfv1.Arguments{
+					Parameters: []wfv1.Parameter{{Name: "a", Value: wfv1.AnyStringPtr("0")}},
+				},
+			},
+		}
+		err := ApplySubmitOpts(wf, &wfv1.SubmitOpts{Parameters: []string{"a=81861780812"}})
+		assert.NoError(t, err)
+		parameters := wf.Spec.Arguments.Parameters
+		if assert.Len(t, parameters, 1) {
+			assert.Equal(t, "a", parameters[0].Name)
+			assert.Equal(t, "81861780812", parameters[0].Value.String())
+		}
+	})
+	t.Run("ParameterFile", func(t *testing.T) {
+		wf := &wfv1.Workflow{}
+		file, err := ioutil.TempFile("", "")
+		assert.NoError(t, err)
+		defer func() { _ = os.Remove(file.Name()) }()
+		err = ioutil.WriteFile(file.Name(), []byte(`a: 81861780812`), 0644)
+		assert.NoError(t, err)
+		err = ApplySubmitOpts(wf, &wfv1.SubmitOpts{ParameterFile: file.Name()})
+		assert.NoError(t, err)
+		parameters := wf.Spec.Arguments.Parameters
+		if assert.Len(t, parameters, 1) {
+			assert.Equal(t, "a", parameters[0].Name)
+			assert.Equal(t, "81861780812", parameters[0].Value.String())
+		}
+	})
+}
+
+func TestFormulateResubmitWorkflow(t *testing.T) {
+	t.Run("Labels", func(t *testing.T) {
+		wf := &wfv1.Workflow{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{
+					common.LabelKeyControllerInstanceID:    "1",
+					common.LabelKeyClusterWorkflowTemplate: "1",
+					common.LabelKeyCronWorkflow:            "1",
+					common.LabelKeyWorkflowTemplate:        "1",
+					common.LabelKeyCreator:                 "1",
+					common.LabelKeyPhase:                   "1",
+					common.LabelKeyCompleted:               "1",
+					common.LabelKeyWorkflowArchivingStatus: "1",
+				},
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "test",
+						Name:       "testObj",
+					},
+				},
+			},
+		}
+		wf, err := FormulateResubmitWorkflow(wf, false)
+		if assert.NoError(t, err) {
+			assert.Contains(t, wf.GetLabels(), common.LabelKeyControllerInstanceID)
+			assert.Contains(t, wf.GetLabels(), common.LabelKeyClusterWorkflowTemplate)
+			assert.Contains(t, wf.GetLabels(), common.LabelKeyCronWorkflow)
+			assert.Contains(t, wf.GetLabels(), common.LabelKeyWorkflowTemplate)
+			assert.NotContains(t, wf.GetLabels(), common.LabelKeyCreator)
+			assert.NotContains(t, wf.GetLabels(), common.LabelKeyPhase)
+			assert.NotContains(t, wf.GetLabels(), common.LabelKeyCompleted)
+			assert.NotContains(t, wf.GetLabels(), common.LabelKeyWorkflowArchivingStatus)
+			assert.Contains(t, wf.GetLabels(), common.LabelKeyPreviousWorkflowName)
+			assert.Equal(t, 1, len(wf.OwnerReferences))
+			assert.Equal(t, "test", wf.OwnerReferences[0].APIVersion)
+			assert.Equal(t, "testObj", wf.OwnerReferences[0].Name)
+		}
+	})
+}
+
+var deepDeleteOfNodes = `
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  creationTimestamp: "2020-09-16T16:07:54Z"
+  generateName: steps-
+  generation: 13
+  labels:
+    workflows.argoproj.io/completed: "true"
+    workflows.argoproj.io/phase: Failed
+  name: steps-9fkqc
+  resourceVersion: "383660"
+  selfLink: /apis/argoproj.io/v1alpha1/namespaces/argo/workflows/steps-9fkqc
+  uid: 241a39ef-4ff1-487f-8461-98df5d2b50fb
+spec:
+  arguments: {}
+  entrypoint: foo
+  templates:
+  - arguments: {}
+    inputs: {}
+    metadata: {}
+    name: foo
+    outputs: {}
+    steps:
+    - - arguments: {}
+        name: pass
+        template: pass
+    - - arguments: {}
+        name: fail
+        template: fail
+  - arguments: {}
+    container:
+      args:
+      - exit 0
+      command:
+      - sh
+      - -c
+      image: alpine
+      name: ""
+      resources: {}
+    inputs: {}
+    metadata: {}
+    name: pass
+    outputs: {}
   - arguments: {}
     container:
       args:
@@ -357,134 +629,174 @@ spec:
       command:
       - sh
       - -c
-      image: alpine:latest
+      image: alpine
       name: ""
       resources: {}
     inputs: {}
     metadata: {}
-    name: approve
+    name: fail
     outputs: {}
 status:
   conditions:
   - status: "True"
     type: Completed
-  finishedAt: "2020-04-10T15:36:03Z"
-  message: child 'fail-template-2878444447' failed
+  finishedAt: "2020-09-16T16:09:32Z"
+  message: child 'steps-9fkqc-3224593506' failed
   nodes:
-    fail-template:
+    steps-9fkqc:
       children:
-      - fail-template-2384955452
-      displayName: fail-template
-      finishedAt: "2020-04-10T15:36:03Z"
-      id: fail-template
-      message: child 'fail-template-2878444447' failed
-      name: fail-template
+      - steps-9fkqc-2929074125
+      displayName: steps-9fkqc
+      finishedAt: "2020-09-16T16:09:32Z"
+      id: steps-9fkqc
+      message: child 'steps-9fkqc-3224593506' failed
+      name: steps-9fkqc
       outboundNodes:
-      - fail-template-2878444447
+      - steps-9fkqc-3224593506
       phase: Failed
-      startedAt: "2020-04-10T15:35:59Z"
-      templateName: fail
-      templateScope: local/fail-template
+      startedAt: "2020-09-16T16:07:54Z"
+      templateName: foo
+      templateScope: local/steps-9fkqc
       type: Steps
-    fail-template-2384955452:
-      boundaryID: fail-template
+    steps-9fkqc-1411266092:
+      boundaryID: steps-9fkqc
       children:
-      - fail-template-2878444447
-      displayName: '[0]'
-      finishedAt: "2020-04-10T15:36:03Z"
-      id: fail-template-2384955452
-      message: child 'fail-template-2878444447' failed
-      name: fail-template[0]
-      phase: Failed
-      startedAt: "2020-04-10T15:35:59Z"
-      templateName: fail
-      templateScope: local/fail-template
-      type: StepGroup
-    fail-template-2878444447:
-      boundaryID: fail-template
-      displayName: approve
-      finishedAt: "2020-04-10T15:36:02Z"
-      id: fail-template-2878444447
-      message: failed with exit code 1
-      name: fail-template[0].approve
+      - steps-9fkqc-2862110744
+      displayName: pass
+      finishedAt: "2020-09-16T16:07:57Z"
+      hostNodeName: minikube
+      id: steps-9fkqc-1411266092
+      name: steps-9fkqc[0].pass
       outputs:
-        artifacts:
-        - archiveLogs: true
-          name: main-logs
-          s3:
-            accessKeySecret:
-              key: accesskey
-              name: my-minio-cred
-            bucket: my-bucket
-            endpoint: minio:9000
-            insecure: true
-            key: fail-template/fail-template-2878444447/main.log
-            secretKeySecret:
-              key: secretkey
-              name: my-minio-cred
+        exitCode: "0"
+      phase: Succeeded
+      resourcesDuration:
+        cpu: 2
+        memory: 1
+      startedAt: "2020-09-16T16:07:54Z"
+      templateName: pass
+      templateScope: local/steps-9fkqc
+      type: Pod
+    steps-9fkqc-2862110744:
+      boundaryID: steps-9fkqc
+      children:
+      - steps-9fkqc-3224593506
+      displayName: '[1]'
+      finishedAt: "2020-09-16T16:09:32Z"
+      id: steps-9fkqc-2862110744
+      message: child 'steps-9fkqc-3224593506' failed
+      name: steps-9fkqc[1]
+      phase: Failed
+      startedAt: "2020-09-16T16:07:59Z"
+      templateName: foo
+      templateScope: local/steps-9fkqc
+      type: StepGroup
+    steps-9fkqc-2929074125:
+      boundaryID: steps-9fkqc
+      children:
+      - steps-9fkqc-1411266092
+      displayName: '[0]'
+      finishedAt: "2020-09-16T16:07:59Z"
+      id: steps-9fkqc-2929074125
+      name: steps-9fkqc[0]
+      phase: Succeeded
+      startedAt: "2020-09-16T16:07:54Z"
+      templateName: foo
+      templateScope: local/steps-9fkqc
+      type: StepGroup
+    steps-9fkqc-3224593506:
+      boundaryID: steps-9fkqc
+      displayName: fail
+      finishedAt: "2020-09-16T16:09:30Z"
+      hostNodeName: minikube
+      id: steps-9fkqc-3224593506
+      message: failed with exit code 1
+      name: steps-9fkqc[1].fail
+      outputs:
+        exitCode: "1"
       phase: Failed
       resourcesDuration:
         cpu: 2
-        memory: 0
-      startedAt: "2020-04-10T15:35:59Z"
-      templateName: approve
-      templateScope: local/fail-template
+        memory: 1
+      startedAt: "2020-09-16T16:09:27Z"
+      templateName: fail
+      templateScope: local/steps-9fkqc
       type: Pod
   phase: Failed
   resourcesDuration:
-    cpu: 2
-    memory: 0
-  startedAt: "2020-04-10T15:35:59Z"
-
+    cpu: 4
+    memory: 2
+  startedAt: "2020-09-16T16:07:54Z"
 `
 
-func TestRetryWorkflowCompressed(t *testing.T) {
-	wfIf := fakeClientset.NewSimpleClientset().ArgoprojV1alpha1().Workflows("")
-	origWf := unmarshalWF(failedWf)
-	kubeCs := fake.NewSimpleClientset()
+func TestDeepDeleteNodes(t *testing.T) {
+	wfIf := argofake.NewSimpleClientset().ArgoprojV1alpha1().Workflows("")
+	kubeClient := &kubefake.Clientset{}
+	origWf := unmarshalWF(deepDeleteOfNodes)
 
-	_, err := kubeCs.CoreV1().Pods("").Create(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "fail-template-2878444447"}})
-	assert.NoError(t, err)
-
-	clearFunc := packer.SetMaxWorkflowSize(1684)
-	defer clearFunc()
-	err = packer.CompressWorkflowIfNeeded(origWf)
-	assert.NoError(t, err)
-
-	_, err = wfIf.Create(origWf)
-	assert.NoError(t, err)
-
-	clearFunc = packer.SetMaxWorkflowSize(1557)
-	defer clearFunc()
-	wf, err := RetryWorkflow(kubeCs, sqldb.ExplosiveOffloadNodeStatusRepo, wfIf, origWf, false, "")
-	assert.NoError(t, err)
-	assert.NotEmpty(t, wf.Status.CompressedNodes)
+	ctx := context.Background()
+	wf, err := wfIf.Create(ctx, origWf, metav1.CreateOptions{})
+	if assert.NoError(t, err) {
+		newWf, err := RetryWorkflow(ctx, kubeClient, hydratorfake.Noop, wfIf, wf.Name, false, "")
+		assert.NoError(t, err)
+		newWfBytes, err := yaml.Marshal(newWf)
+		assert.NoError(t, err)
+		assert.NotContains(t, string(newWfBytes), "steps-9fkqc-3224593506")
+	}
 }
 
-func TestRetryWorkflowOffloaded(t *testing.T) {
-	wfIf := fakeClientset.NewSimpleClientset().ArgoprojV1alpha1().Workflows("")
-	origWf := unmarshalWF(failedWf)
-	kubeCs := fake.NewSimpleClientset()
-	_, err := kubeCs.CoreV1().Pods("").Create(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "fail-template-2878444447"}})
+func TestRetryWorkflow(t *testing.T) {
+	kubeClient := kubefake.NewSimpleClientset()
+	wfClient := argofake.NewSimpleClientset().ArgoprojV1alpha1().Workflows("my-ns")
+	wf := &wfv1.Workflow{
+		ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{
+			common.LabelKeyCompleted:               "true",
+			common.LabelKeyWorkflowArchivingStatus: "Pending",
+		}},
+		Status: wfv1.WorkflowStatus{Phase: wfv1.NodeFailed},
+	}
+
+	ctx := context.Background()
+	_, err := wfClient.Create(ctx, wf, metav1.CreateOptions{})
 	assert.NoError(t, err)
+	wf, err = RetryWorkflow(ctx, kubeClient, hydratorfake.Always, wfClient, wf.Name, false, "")
+	if assert.NoError(t, err) {
+		assert.Equal(t, wfv1.NodeRunning, wf.Status.Phase)
+		assert.NotContains(t, wf.Labels, common.LabelKeyCompleted)
+		assert.NotContains(t, wf.Labels, common.LabelKeyWorkflowArchivingStatus)
+	}
+}
 
-	origNodes := origWf.Status.Nodes
-
-	origWf.Status.Nodes = nil
-	origWf.Status.OffloadNodeStatusVersion = "123"
-
-	_, err = wfIf.Create(origWf)
+func TestFromUnstructuredObj(t *testing.T) {
+	un := &unstructured.Unstructured{}
+	err := yaml.Unmarshal([]byte(`apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: example-integers
+spec:
+  schedule: "* * * * *"
+  workflowSpec:
+    entrypoint: whalesay
+    templates:
+      - name: whalesay
+        inputs:
+          parameters:
+            - name: age
+              value: 20
+        container:
+          image: my-image`), un)
 	assert.NoError(t, err)
-
-	offloadNodeStatusRepo := &mocks.OffloadNodeStatusRepo{}
-	offloadNodeStatusRepo.On("IsEnabled", mock.Anything).Return(true)
-	offloadNodeStatusRepo.On("Get", "7e74dbb9-d681-4c22-9bed-a581ec28383f", "123").Return(origNodes, nil)
-	offloadNodeStatusRepo.On("Save", "7e74dbb9-d681-4c22-9bed-a581ec28383f", mock.Anything, mock.Anything).Return("1234", nil)
-
-	_, err = RetryWorkflow(kubeCs, offloadNodeStatusRepo, wfIf, origWf, false, "")
+	x := &wfv1.CronWorkflow{}
+	err = FromUnstructuredObj(un, x)
 	assert.NoError(t, err)
+}
 
-	wf, err := wfIf.Get("fail-template", metav1.GetOptions{})
-	assert.NoError(t, err)
-	assert.Equal(t, "1234", wf.Status.OffloadNodeStatusVersion)
+func TestToUnstructured(t *testing.T) {
+	un, err := ToUnstructured(&wfv1.Workflow{})
+	if assert.NoError(t, err) {
+		gv := un.GetObjectKind().GroupVersionKind()
+		assert.Equal(t, workflow.WorkflowKind, gv.Kind)
+		assert.Equal(t, workflow.Group, gv.Group)
+		assert.Equal(t, workflow.Version, gv.Version)
+	}
 }

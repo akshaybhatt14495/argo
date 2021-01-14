@@ -11,7 +11,6 @@ import (
 	context "context"
 	fmt "fmt"
 	v1alpha1 "github.com/argoproj/argo/pkg/apis/workflow/v1alpha1"
-	_ "github.com/gogo/protobuf/gogoproto"
 	proto "github.com/gogo/protobuf/proto"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	grpc "google.golang.org/grpc"
@@ -36,14 +35,15 @@ var _ = math.Inf
 const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 
 type WorkflowCreateRequest struct {
-	Namespace            string             `protobuf:"bytes,1,opt,name=namespace,proto3" json:"namespace,omitempty"`
-	Workflow             *v1alpha1.Workflow `protobuf:"bytes,2,opt,name=workflow,proto3" json:"workflow,omitempty"`
-	InstanceID           string             `protobuf:"bytes,3,opt,name=instanceID,proto3" json:"instanceID,omitempty"`
-	ServerDryRun         bool               `protobuf:"varint,4,opt,name=serverDryRun,proto3" json:"serverDryRun,omitempty"`
-	CreateOptions        *v1.CreateOptions  `protobuf:"bytes,5,opt,name=createOptions,proto3" json:"createOptions,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
-	XXX_unrecognized     []byte             `json:"-"`
-	XXX_sizecache        int32              `json:"-"`
+	Namespace string             `protobuf:"bytes,1,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	Workflow  *v1alpha1.Workflow `protobuf:"bytes,2,opt,name=workflow,proto3" json:"workflow,omitempty"`
+	// This field is no longer used.
+	InstanceID           string            `protobuf:"bytes,3,opt,name=instanceID,proto3" json:"instanceID,omitempty"` // Deprecated: Do not use.
+	ServerDryRun         bool              `protobuf:"varint,4,opt,name=serverDryRun,proto3" json:"serverDryRun,omitempty"`
+	CreateOptions        *v1.CreateOptions `protobuf:"bytes,5,opt,name=createOptions,proto3" json:"createOptions,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
+	XXX_unrecognized     []byte            `json:"-"`
+	XXX_sizecache        int32             `json:"-"`
 }
 
 func (m *WorkflowCreateRequest) Reset()         { *m = WorkflowCreateRequest{} }
@@ -93,6 +93,7 @@ func (m *WorkflowCreateRequest) GetWorkflow() *v1alpha1.Workflow {
 	return nil
 }
 
+// Deprecated: Do not use.
 func (m *WorkflowCreateRequest) GetInstanceID() string {
 	if m != nil {
 		return m.InstanceID
@@ -316,7 +317,7 @@ func (m *WorkflowResubmitRequest) GetMemoized() bool {
 type WorkflowRetryRequest struct {
 	Name                 string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Namespace            string   `protobuf:"bytes,2,opt,name=namespace,proto3" json:"namespace,omitempty"`
-	RestartSuccesful     bool     `protobuf:"varint,3,opt,name=restartSuccesful,proto3" json:"restartSuccesful,omitempty"`
+	RestartSuccessful    bool     `protobuf:"varint,3,opt,name=restartSuccessful,proto3" json:"restartSuccessful,omitempty"`
 	NodeFieldSelector    string   `protobuf:"bytes,4,opt,name=nodeFieldSelector,proto3" json:"nodeFieldSelector,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -370,9 +371,9 @@ func (m *WorkflowRetryRequest) GetNamespace() string {
 	return ""
 }
 
-func (m *WorkflowRetryRequest) GetRestartSuccesful() bool {
+func (m *WorkflowRetryRequest) GetRestartSuccessful() bool {
 	if m != nil {
-		return m.RestartSuccesful
+		return m.RestartSuccessful
 	}
 	return false
 }
@@ -573,6 +574,93 @@ func (m *WorkflowStopRequest) GetMessage() string {
 	return ""
 }
 
+type WorkflowSetRequest struct {
+	Name                 string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Namespace            string   `protobuf:"bytes,2,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	NodeFieldSelector    string   `protobuf:"bytes,3,opt,name=nodeFieldSelector,proto3" json:"nodeFieldSelector,omitempty"`
+	Message              string   `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`
+	Phase                string   `protobuf:"bytes,5,opt,name=phase,proto3" json:"phase,omitempty"`
+	OutputParameters     string   `protobuf:"bytes,6,opt,name=outputParameters,proto3" json:"outputParameters,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *WorkflowSetRequest) Reset()         { *m = WorkflowSetRequest{} }
+func (m *WorkflowSetRequest) String() string { return proto.CompactTextString(m) }
+func (*WorkflowSetRequest) ProtoMessage()    {}
+func (*WorkflowSetRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_1f6bb75f9e833cb6, []int{8}
+}
+func (m *WorkflowSetRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *WorkflowSetRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_WorkflowSetRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *WorkflowSetRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_WorkflowSetRequest.Merge(m, src)
+}
+func (m *WorkflowSetRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *WorkflowSetRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_WorkflowSetRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_WorkflowSetRequest proto.InternalMessageInfo
+
+func (m *WorkflowSetRequest) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *WorkflowSetRequest) GetNamespace() string {
+	if m != nil {
+		return m.Namespace
+	}
+	return ""
+}
+
+func (m *WorkflowSetRequest) GetNodeFieldSelector() string {
+	if m != nil {
+		return m.NodeFieldSelector
+	}
+	return ""
+}
+
+func (m *WorkflowSetRequest) GetMessage() string {
+	if m != nil {
+		return m.Message
+	}
+	return ""
+}
+
+func (m *WorkflowSetRequest) GetPhase() string {
+	if m != nil {
+		return m.Phase
+	}
+	return ""
+}
+
+func (m *WorkflowSetRequest) GetOutputParameters() string {
+	if m != nil {
+		return m.OutputParameters
+	}
+	return ""
+}
+
 type WorkflowSuspendRequest struct {
 	Name                 string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Namespace            string   `protobuf:"bytes,2,opt,name=namespace,proto3" json:"namespace,omitempty"`
@@ -585,7 +673,7 @@ func (m *WorkflowSuspendRequest) Reset()         { *m = WorkflowSuspendRequest{}
 func (m *WorkflowSuspendRequest) String() string { return proto.CompactTextString(m) }
 func (*WorkflowSuspendRequest) ProtoMessage()    {}
 func (*WorkflowSuspendRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_1f6bb75f9e833cb6, []int{8}
+	return fileDescriptor_1f6bb75f9e833cb6, []int{9}
 }
 func (m *WorkflowSuspendRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -642,7 +730,7 @@ func (m *WorkflowLogRequest) Reset()         { *m = WorkflowLogRequest{} }
 func (m *WorkflowLogRequest) String() string { return proto.CompactTextString(m) }
 func (*WorkflowLogRequest) ProtoMessage()    {}
 func (*WorkflowLogRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_1f6bb75f9e833cb6, []int{9}
+	return fileDescriptor_1f6bb75f9e833cb6, []int{10}
 }
 func (m *WorkflowLogRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -712,7 +800,7 @@ func (m *WorkflowDeleteRequest) Reset()         { *m = WorkflowDeleteRequest{} }
 func (m *WorkflowDeleteRequest) String() string { return proto.CompactTextString(m) }
 func (*WorkflowDeleteRequest) ProtoMessage()    {}
 func (*WorkflowDeleteRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_1f6bb75f9e833cb6, []int{10}
+	return fileDescriptor_1f6bb75f9e833cb6, []int{11}
 }
 func (m *WorkflowDeleteRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -772,7 +860,7 @@ func (m *WorkflowDeleteResponse) Reset()         { *m = WorkflowDeleteResponse{}
 func (m *WorkflowDeleteResponse) String() string { return proto.CompactTextString(m) }
 func (*WorkflowDeleteResponse) ProtoMessage()    {}
 func (*WorkflowDeleteResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_1f6bb75f9e833cb6, []int{11}
+	return fileDescriptor_1f6bb75f9e833cb6, []int{12}
 }
 func (m *WorkflowDeleteResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -813,7 +901,7 @@ func (m *WatchWorkflowsRequest) Reset()         { *m = WatchWorkflowsRequest{} }
 func (m *WatchWorkflowsRequest) String() string { return proto.CompactTextString(m) }
 func (*WatchWorkflowsRequest) ProtoMessage()    {}
 func (*WatchWorkflowsRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_1f6bb75f9e833cb6, []int{12}
+	return fileDescriptor_1f6bb75f9e833cb6, []int{13}
 }
 func (m *WatchWorkflowsRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -870,7 +958,7 @@ func (m *WorkflowWatchEvent) Reset()         { *m = WorkflowWatchEvent{} }
 func (m *WorkflowWatchEvent) String() string { return proto.CompactTextString(m) }
 func (*WorkflowWatchEvent) ProtoMessage()    {}
 func (*WorkflowWatchEvent) Descriptor() ([]byte, []int) {
-	return fileDescriptor_1f6bb75f9e833cb6, []int{13}
+	return fileDescriptor_1f6bb75f9e833cb6, []int{14}
 }
 func (m *WorkflowWatchEvent) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -913,6 +1001,61 @@ func (m *WorkflowWatchEvent) GetObject() *v1alpha1.Workflow {
 	return nil
 }
 
+type WatchEventsRequest struct {
+	Namespace            string          `protobuf:"bytes,1,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	ListOptions          *v1.ListOptions `protobuf:"bytes,2,opt,name=listOptions,proto3" json:"listOptions,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
+	XXX_unrecognized     []byte          `json:"-"`
+	XXX_sizecache        int32           `json:"-"`
+}
+
+func (m *WatchEventsRequest) Reset()         { *m = WatchEventsRequest{} }
+func (m *WatchEventsRequest) String() string { return proto.CompactTextString(m) }
+func (*WatchEventsRequest) ProtoMessage()    {}
+func (*WatchEventsRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_1f6bb75f9e833cb6, []int{15}
+}
+func (m *WatchEventsRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *WatchEventsRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_WatchEventsRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *WatchEventsRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_WatchEventsRequest.Merge(m, src)
+}
+func (m *WatchEventsRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *WatchEventsRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_WatchEventsRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_WatchEventsRequest proto.InternalMessageInfo
+
+func (m *WatchEventsRequest) GetNamespace() string {
+	if m != nil {
+		return m.Namespace
+	}
+	return ""
+}
+
+func (m *WatchEventsRequest) GetListOptions() *v1.ListOptions {
+	if m != nil {
+		return m.ListOptions
+	}
+	return nil
+}
+
 type LogEntry struct {
 	Content              string   `protobuf:"bytes,1,opt,name=content,proto3" json:"content,omitempty"`
 	PodName              string   `protobuf:"bytes,2,opt,name=podName,proto3" json:"podName,omitempty"`
@@ -925,7 +1068,7 @@ func (m *LogEntry) Reset()         { *m = LogEntry{} }
 func (m *LogEntry) String() string { return proto.CompactTextString(m) }
 func (*LogEntry) ProtoMessage()    {}
 func (*LogEntry) Descriptor() ([]byte, []int) {
-	return fileDescriptor_1f6bb75f9e833cb6, []int{14}
+	return fileDescriptor_1f6bb75f9e833cb6, []int{16}
 }
 func (m *LogEntry) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -980,7 +1123,7 @@ func (m *WorkflowLintRequest) Reset()         { *m = WorkflowLintRequest{} }
 func (m *WorkflowLintRequest) String() string { return proto.CompactTextString(m) }
 func (*WorkflowLintRequest) ProtoMessage()    {}
 func (*WorkflowLintRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_1f6bb75f9e833cb6, []int{15}
+	return fileDescriptor_1f6bb75f9e833cb6, []int{17}
 }
 func (m *WorkflowLintRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1028,7 +1171,6 @@ type WorkflowSubmitRequest struct {
 	ResourceKind         string               `protobuf:"bytes,2,opt,name=resourceKind,proto3" json:"resourceKind,omitempty"`
 	ResourceName         string               `protobuf:"bytes,3,opt,name=resourceName,proto3" json:"resourceName,omitempty"`
 	SubmitOptions        *v1alpha1.SubmitOpts `protobuf:"bytes,4,opt,name=submitOptions,proto3" json:"submitOptions,omitempty"`
-	CreateOptions        *v1.CreateOptions    `protobuf:"bytes,5,opt,name=createOptions,proto3" json:"createOptions,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
 	XXX_unrecognized     []byte               `json:"-"`
 	XXX_sizecache        int32                `json:"-"`
@@ -1038,7 +1180,7 @@ func (m *WorkflowSubmitRequest) Reset()         { *m = WorkflowSubmitRequest{} }
 func (m *WorkflowSubmitRequest) String() string { return proto.CompactTextString(m) }
 func (*WorkflowSubmitRequest) ProtoMessage()    {}
 func (*WorkflowSubmitRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_1f6bb75f9e833cb6, []int{16}
+	return fileDescriptor_1f6bb75f9e833cb6, []int{18}
 }
 func (m *WorkflowSubmitRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1095,13 +1237,6 @@ func (m *WorkflowSubmitRequest) GetSubmitOptions() *v1alpha1.SubmitOpts {
 	return nil
 }
 
-func (m *WorkflowSubmitRequest) GetCreateOptions() *v1.CreateOptions {
-	if m != nil {
-		return m.CreateOptions
-	}
-	return nil
-}
-
 func init() {
 	proto.RegisterType((*WorkflowCreateRequest)(nil), "workflow.WorkflowCreateRequest")
 	proto.RegisterType((*WorkflowGetRequest)(nil), "workflow.WorkflowGetRequest")
@@ -1111,12 +1246,14 @@ func init() {
 	proto.RegisterType((*WorkflowResumeRequest)(nil), "workflow.WorkflowResumeRequest")
 	proto.RegisterType((*WorkflowTerminateRequest)(nil), "workflow.WorkflowTerminateRequest")
 	proto.RegisterType((*WorkflowStopRequest)(nil), "workflow.WorkflowStopRequest")
+	proto.RegisterType((*WorkflowSetRequest)(nil), "workflow.WorkflowSetRequest")
 	proto.RegisterType((*WorkflowSuspendRequest)(nil), "workflow.WorkflowSuspendRequest")
 	proto.RegisterType((*WorkflowLogRequest)(nil), "workflow.WorkflowLogRequest")
 	proto.RegisterType((*WorkflowDeleteRequest)(nil), "workflow.WorkflowDeleteRequest")
 	proto.RegisterType((*WorkflowDeleteResponse)(nil), "workflow.WorkflowDeleteResponse")
 	proto.RegisterType((*WatchWorkflowsRequest)(nil), "workflow.WatchWorkflowsRequest")
 	proto.RegisterType((*WorkflowWatchEvent)(nil), "workflow.WorkflowWatchEvent")
+	proto.RegisterType((*WatchEventsRequest)(nil), "workflow.WatchEventsRequest")
 	proto.RegisterType((*LogEntry)(nil), "workflow.LogEntry")
 	proto.RegisterType((*WorkflowLintRequest)(nil), "workflow.WorkflowLintRequest")
 	proto.RegisterType((*WorkflowSubmitRequest)(nil), "workflow.WorkflowSubmitRequest")
@@ -1127,87 +1264,94 @@ func init() {
 }
 
 var fileDescriptor_1f6bb75f9e833cb6 = []byte{
-	// 1267 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xc4, 0x98, 0x41, 0x6f, 0xdc, 0x44,
-	0x1b, 0xc7, 0x35, 0x49, 0xdf, 0x36, 0x9d, 0x26, 0x69, 0x3b, 0x2f, 0x94, 0x95, 0xd5, 0xa6, 0xe9,
-	0x40, 0x21, 0x4d, 0x1b, 0x3b, 0x9b, 0x16, 0x28, 0x95, 0x0a, 0x2a, 0x4d, 0x89, 0x80, 0x15, 0x54,
-	0x5e, 0x10, 0x2a, 0x37, 0xc7, 0xfb, 0xc4, 0x71, 0xe3, 0xf5, 0x18, 0xcf, 0xec, 0x46, 0x4b, 0x15,
-	0x10, 0x1c, 0x39, 0xc0, 0x81, 0x0b, 0x82, 0x0b, 0x14, 0x90, 0x90, 0x90, 0xa0, 0x7c, 0x02, 0xae,
-	0x1c, 0x91, 0xf8, 0x02, 0x28, 0xe2, 0x83, 0xa0, 0x19, 0xdb, 0x63, 0x3b, 0xbb, 0xdd, 0x9a, 0xb8,
-	0xd0, 0xdb, 0x8c, 0xc7, 0x33, 0xff, 0xdf, 0x3c, 0xcf, 0xcc, 0xe3, 0xff, 0x2e, 0x3e, 0x1b, 0x6d,
-	0x79, 0x96, 0x13, 0xf9, 0x6e, 0xe0, 0x43, 0x28, 0xac, 0x6d, 0x16, 0x6f, 0x6d, 0x04, 0x6c, 0x5b,
-	0x37, 0xcc, 0x28, 0x66, 0x82, 0x91, 0xa9, 0xac, 0x6f, 0x2c, 0x79, 0xbe, 0xd8, 0xec, 0xad, 0x9b,
-	0x2e, 0xeb, 0x5a, 0x1e, 0xf3, 0x98, 0xa5, 0x5e, 0x58, 0xef, 0x6d, 0xa8, 0x9e, 0xea, 0xa8, 0x56,
-	0x32, 0xd1, 0x38, 0xe9, 0x31, 0xe6, 0x05, 0x20, 0x25, 0x2c, 0x27, 0x0c, 0x99, 0x70, 0x84, 0xcf,
-	0x42, 0x9e, 0x8e, 0x5e, 0xda, 0xba, 0xcc, 0x4d, 0x9f, 0xc9, 0xd1, 0xae, 0xe3, 0x6e, 0xfa, 0x21,
-	0xc4, 0x03, 0x2b, 0x25, 0xe2, 0x56, 0x17, 0x84, 0x63, 0xf5, 0x9b, 0x96, 0x07, 0x21, 0xc4, 0x8e,
-	0x80, 0x4e, 0x3a, 0xeb, 0x7a, 0x01, 0xc1, 0x89, 0x95, 0xe8, 0x6d, 0xd5, 0xc8, 0xa7, 0xea, 0x7d,
-	0xf4, 0x9b, 0x4e, 0x10, 0x6d, 0x3a, 0xc3, 0x8b, 0xd0, 0x5c, 0xda, 0x72, 0x59, 0x0c, 0x23, 0x84,
-	0xe8, 0xcf, 0x13, 0xf8, 0xf1, 0x77, 0xd2, 0x95, 0xae, 0xc7, 0xe0, 0x08, 0xb0, 0xe1, 0xbd, 0x1e,
-	0x70, 0x41, 0x4e, 0xe2, 0xc3, 0xa1, 0xd3, 0x05, 0x1e, 0x39, 0x2e, 0x34, 0xd0, 0x3c, 0x5a, 0x38,
-	0x6c, 0xe7, 0x0f, 0xc8, 0x2d, 0xac, 0xe3, 0xd5, 0x98, 0x98, 0x47, 0x0b, 0x47, 0x56, 0xae, 0x9a,
-	0x39, 0xb3, 0x99, 0x31, 0xab, 0x86, 0x19, 0x6d, 0x79, 0xa6, 0x64, 0x36, 0x75, 0xc8, 0x33, 0x66,
-	0x33, 0xd3, 0xb6, 0xf5, 0x72, 0x64, 0x0e, 0x63, 0x3f, 0xe4, 0xc2, 0x09, 0x5d, 0x78, 0x75, 0xb5,
-	0x31, 0xa9, 0x94, 0x0b, 0x4f, 0x08, 0xc5, 0xd3, 0x1c, 0xe2, 0x3e, 0xc4, 0xab, 0xf1, 0xc0, 0xee,
-	0x85, 0x8d, 0x03, 0xf3, 0x68, 0x61, 0xca, 0x2e, 0x3d, 0x23, 0xb7, 0xf0, 0x8c, 0xab, 0x76, 0xf3,
-	0x66, 0xa4, 0x92, 0xd1, 0xf8, 0x9f, 0x62, 0xbc, 0x68, 0x26, 0x21, 0x31, 0x8b, 0xd9, 0xc8, 0xf1,
-	0x64, 0x36, 0xcc, 0x7e, 0xd3, 0xbc, 0x5e, 0x9c, 0x6a, 0x97, 0x57, 0xa2, 0xf7, 0x10, 0x26, 0x19,
-	0xf5, 0x1a, 0x88, 0x2c, 0x5c, 0x04, 0x1f, 0x90, 0xd1, 0x49, 0x23, 0xa5, 0xda, 0xe5, 0x10, 0x4e,
-	0xec, 0x0d, 0xe1, 0x4d, 0x8c, 0x3d, 0x10, 0x19, 0xe0, 0xa4, 0x02, 0x5c, 0xae, 0x06, 0xb8, 0xa6,
-	0xe7, 0xd9, 0x85, 0x35, 0xc8, 0x09, 0x7c, 0x70, 0xc3, 0x87, 0xa0, 0xc3, 0x55, 0x4c, 0x0e, 0xdb,
-	0x69, 0x8f, 0x7e, 0x8d, 0xf0, 0xff, 0x33, 0xe4, 0x96, 0xcf, 0x45, 0xb5, 0x14, 0xb7, 0xf1, 0x91,
-	0xc0, 0xe7, 0x1a, 0x30, 0xc9, 0x72, 0xb3, 0x1a, 0x60, 0x2b, 0x9f, 0x68, 0x17, 0x57, 0x29, 0x20,
-	0x4e, 0x96, 0x10, 0x3d, 0xfc, 0x84, 0x3e, 0x0a, 0xc0, 0x7b, 0xeb, 0x5d, 0xbf, 0x46, 0x64, 0x0d,
-	0x3c, 0xd5, 0x85, 0x2e, 0xf3, 0xdf, 0x87, 0x8e, 0x92, 0x99, 0xb2, 0x75, 0x9f, 0xde, 0x45, 0xf8,
-	0xb1, 0x5c, 0x49, 0xc4, 0x83, 0xfd, 0xcb, 0x2c, 0xe2, 0x63, 0x31, 0x70, 0xe1, 0xc4, 0xa2, 0xdd,
-	0x73, 0x5d, 0xe0, 0x1b, 0xbd, 0x20, 0x95, 0x1b, 0x7a, 0x4e, 0x2e, 0xe0, 0xe3, 0x21, 0xeb, 0xc0,
-	0x2b, 0x72, 0xb7, 0x6d, 0x08, 0xc0, 0x15, 0x2c, 0x4e, 0xb3, 0x34, 0x3c, 0x40, 0xb7, 0xf3, 0x4b,
-	0x29, 0xa3, 0xd1, 0x85, 0xfd, 0x43, 0x8e, 0x14, 0x9e, 0xbc, 0x9f, 0x70, 0x0b, 0x37, 0x32, 0xe1,
-	0xb7, 0x20, 0xee, 0xfa, 0x61, 0xa1, 0x20, 0xfc, 0x63, 0x6d, 0xfa, 0x59, 0xe1, 0xdc, 0xb5, 0x05,
-	0x8b, 0xfe, 0xa3, 0x5d, 0x90, 0x06, 0x3e, 0xd4, 0x05, 0xce, 0x1d, 0x0f, 0xd2, 0x10, 0x67, 0x5d,
-	0xfa, 0x1a, 0x3e, 0xa1, 0x81, 0x7a, 0x3c, 0x82, 0xb0, 0xb3, 0xff, 0xdd, 0x7d, 0x5b, 0x28, 0x04,
-	0x2d, 0xe6, 0xed, 0x7f, 0x73, 0x0d, 0x7c, 0x28, 0x62, 0x9d, 0x37, 0xe4, 0xa4, 0x64, 0x4b, 0x59,
-	0x97, 0x5c, 0xc3, 0x38, 0x60, 0x5e, 0x76, 0x03, 0x0f, 0xa8, 0x1b, 0x78, 0xa6, 0x70, 0x03, 0x4d,
-	0x59, 0xd6, 0xe5, 0x7d, 0xbb, 0xc9, 0x3a, 0x2d, 0xfd, 0xa2, 0x5d, 0x98, 0x44, 0xbf, 0x43, 0xf9,
-	0x59, 0x5a, 0x85, 0x00, 0x6a, 0xe4, 0x53, 0x56, 0xd5, 0x8e, 0x5a, 0xa2, 0x5c, 0xb4, 0x2a, 0x56,
-	0xd5, 0xd5, 0xe2, 0x54, 0xbb, 0xbc, 0x12, 0x6d, 0xe4, 0x89, 0xc9, 0x28, 0x79, 0xc4, 0x42, 0x0e,
-	0xf4, 0x13, 0xb9, 0x01, 0x47, 0xb8, 0x9b, 0xd9, 0x38, 0x7f, 0x74, 0xe5, 0x8b, 0x7e, 0x98, 0xa7,
-	0x5c, 0x31, 0xdd, 0xe8, 0x43, 0xa8, 0x22, 0x29, 0x06, 0x91, 0x8e, 0xa4, 0x6c, 0x93, 0xb7, 0xf1,
-	0x41, 0xb6, 0x7e, 0x1b, 0x5c, 0xf1, 0x70, 0x3e, 0x8f, 0xe9, 0x62, 0xf4, 0x45, 0x3c, 0xd5, 0x62,
-	0xde, 0x8d, 0x50, 0xc4, 0x03, 0x79, 0x6e, 0x5c, 0x16, 0x0a, 0x08, 0x45, 0xaa, 0x9c, 0x75, 0x8b,
-	0x27, 0x6a, 0xa2, 0x74, 0xa2, 0xe8, 0xa7, 0xa5, 0x4f, 0x41, 0x28, 0x1e, 0xf5, 0xd7, 0x9e, 0xfe,
-	0x5a, 0x30, 0x20, 0xed, 0x52, 0xdd, 0x1f, 0x8f, 0x44, 0xf1, 0x74, 0x0c, 0x9c, 0xf5, 0x62, 0x17,
-	0x5e, 0xf7, 0xc3, 0x4e, 0xba, 0xcf, 0xd2, 0xb3, 0xe2, 0x3b, 0x85, 0xdb, 0x55, 0x7a, 0x46, 0x00,
-	0xcf, 0x24, 0x9f, 0x9b, 0xf2, 0x2d, 0x7b, 0x69, 0x5f, 0xfb, 0x6b, 0x67, 0x2b, 0x71, 0xbb, 0xbc,
-	0xea, 0xbf, 0x68, 0x48, 0x56, 0xee, 0x1d, 0xc7, 0x47, 0x75, 0x04, 0x21, 0xee, 0xfb, 0x2e, 0x90,
-	0x2f, 0x11, 0x9e, 0x4d, 0x26, 0x65, 0x23, 0xe4, 0x74, 0xce, 0x3b, 0xd2, 0xf0, 0x19, 0xf5, 0x52,
-	0x4a, 0x17, 0x3e, 0xfe, 0xe3, 0xaf, 0xcf, 0x27, 0x28, 0x3d, 0xa5, 0xfc, 0x66, 0xbf, 0xa9, 0x0d,
-	0x2a, 0xb7, 0xee, 0xe8, 0xb4, 0xed, 0x5c, 0x41, 0x8b, 0xe4, 0x0b, 0x84, 0x8f, 0xac, 0x81, 0xd0,
-	0x64, 0x27, 0x87, 0xc9, 0x72, 0x63, 0x55, 0x17, 0xeb, 0x82, 0xc2, 0x7a, 0x9a, 0x3c, 0x35, 0x16,
-	0x2b, 0x69, 0xef, 0x48, 0xb4, 0x19, 0x79, 0xf9, 0x75, 0xad, 0x21, 0xa7, 0x86, 0xe1, 0x0a, 0x16,
-	0xca, 0xb8, 0x56, 0x8b, 0x4e, 0xae, 0x44, 0xcf, 0x2a, 0xc2, 0xd3, 0x64, 0x7c, 0xe0, 0xc8, 0x07,
-	0x78, 0xb6, 0x5c, 0x06, 0x4b, 0x19, 0x1d, 0x55, 0x20, 0x8d, 0x11, 0x81, 0xcd, 0xab, 0x16, 0x3d,
-	0xaf, 0x74, 0xcf, 0x92, 0x27, 0xf7, 0xea, 0x2e, 0x81, 0x1c, 0x2f, 0xa9, 0x2f, 0x23, 0xf2, 0x11,
-	0xc2, 0xb3, 0x49, 0x69, 0x1e, 0x77, 0xa4, 0x4a, 0x9f, 0x18, 0x63, 0xfe, 0xfe, 0x2f, 0xa4, 0xd5,
-	0x3d, 0x4d, 0xcf, 0x62, 0xb5, 0xf4, 0x7c, 0x8f, 0xf0, 0x8c, 0x32, 0x6d, 0x1a, 0x61, 0x6e, 0x58,
-	0xa1, 0xe8, 0xea, 0xea, 0x9e, 0x9e, 0x67, 0x15, 0x9e, 0x65, 0x2c, 0x56, 0xc1, 0xb3, 0x62, 0xa9,
-	0x2c, 0x4f, 0xf8, 0x4f, 0x08, 0x1f, 0xcb, 0x6c, 0xac, 0x46, 0x3d, 0x33, 0x0a, 0xb5, 0x64, 0x75,
-	0xeb, 0xd2, 0x5e, 0x56, 0xb4, 0x2b, 0xc6, 0x52, 0x45, 0xda, 0x44, 0x5c, 0x02, 0xff, 0x80, 0xf0,
-	0x6c, 0xe2, 0x34, 0xc7, 0x25, 0xb7, 0xe4, 0x45, 0xeb, 0xc2, 0x3e, 0xa7, 0x60, 0x97, 0x8d, 0xf3,
-	0x95, 0x61, 0xbb, 0x20, 0x51, 0x7f, 0x44, 0xf8, 0x68, 0xea, 0xdd, 0x34, 0xeb, 0x88, 0x73, 0x56,
-	0xb6, 0x77, 0x75, 0x61, 0x9f, 0x57, 0xb0, 0x4d, 0xe3, 0x42, 0x25, 0x58, 0x9e, 0x68, 0x4b, 0xda,
-	0x5f, 0x10, 0x3e, 0xae, 0x9d, 0xb4, 0xe6, 0xa5, 0xc3, 0xbc, 0x7b, 0xed, 0x76, 0x5d, 0xe2, 0x17,
-	0x14, 0xf1, 0x45, 0xc3, 0xac, 0x44, 0x2c, 0x32, 0x75, 0xc9, 0x7c, 0x17, 0xe1, 0x69, 0x69, 0xd7,
-	0x35, 0xee, 0x88, 0x1a, 0x58, 0xb0, 0xf3, 0x75, 0x49, 0x2f, 0x29, 0x52, 0xd3, 0x38, 0x57, 0x2d,
-	0xb6, 0x82, 0x45, 0x12, 0xf2, 0x2b, 0x84, 0xa7, 0xa5, 0x81, 0x19, 0x07, 0x59, 0x30, 0x38, 0x75,
-	0x21, 0x97, 0x14, 0xe4, 0x33, 0x94, 0x8e, 0x87, 0x0c, 0xfc, 0x50, 0xdd, 0xa7, 0x01, 0x3e, 0x94,
-	0x58, 0x72, 0x3e, 0xea, 0xeb, 0x96, 0xff, 0x5a, 0x30, 0x48, 0x3e, 0x9a, 0xf9, 0x3a, 0x7a, 0x45,
-	0x69, 0x5d, 0x22, 0x2b, 0x95, 0x02, 0x72, 0x27, 0xb5, 0x76, 0x3b, 0x56, 0xc0, 0xbc, 0x65, 0x44,
-	0xbe, 0x41, 0x78, 0xb6, 0x5d, 0xae, 0x3c, 0xa7, 0x47, 0x5d, 0x8f, 0x87, 0x58, 0x77, 0x2c, 0x05,
-	0x7c, 0x8e, 0x3e, 0xa0, 0x88, 0xeb, 0x72, 0xf3, 0xf2, 0xd5, 0xdf, 0x76, 0xe7, 0xd0, 0xef, 0xbb,
-	0x73, 0xe8, 0xcf, 0xdd, 0x39, 0xf4, 0xae, 0xf5, 0xa0, 0x3f, 0xbb, 0xf6, 0xfc, 0x73, 0xb7, 0x7e,
-	0x50, 0xfd, 0x77, 0x75, 0xf1, 0xef, 0x00, 0x00, 0x00, 0xff, 0xff, 0x2f, 0x3f, 0x7b, 0xe3, 0xda,
-	0x13, 0x00, 0x00,
+	// 1379 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xc4, 0x98, 0x4d, 0x6f, 0xdc, 0x44,
+	0x18, 0xc7, 0x35, 0x9b, 0x36, 0x4d, 0x26, 0x2f, 0x6d, 0x87, 0x52, 0x16, 0xab, 0x4d, 0xd3, 0x29,
+	0x85, 0x34, 0x6d, 0xec, 0xbc, 0x14, 0x28, 0x48, 0x05, 0xb5, 0x4d, 0xa9, 0x80, 0x08, 0x2a, 0x2f,
+	0x08, 0x95, 0x9b, 0xe3, 0x7d, 0xea, 0xb8, 0x59, 0x7b, 0x8c, 0x67, 0x76, 0xab, 0x50, 0x0a, 0x82,
+	0x0b, 0x88, 0x03, 0x1c, 0xb8, 0x20, 0x38, 0xf0, 0x2e, 0x21, 0x21, 0x21, 0x10, 0x5f, 0x80, 0x23,
+	0xc7, 0x4a, 0x7c, 0x01, 0x54, 0xf5, 0x83, 0xa0, 0x19, 0xdb, 0x63, 0x3b, 0xbb, 0xdd, 0x9a, 0x38,
+	0xa2, 0x37, 0xbf, 0xcd, 0xfc, 0x7f, 0xf3, 0x9f, 0x99, 0xe7, 0x79, 0xc6, 0xf8, 0x64, 0xb4, 0xe9,
+	0x59, 0x4e, 0xe4, 0xbb, 0x1d, 0x1f, 0x42, 0x61, 0xdd, 0x64, 0xf1, 0xe6, 0xf5, 0x0e, 0xbb, 0xa9,
+	0x2f, 0xcc, 0x28, 0x66, 0x82, 0x91, 0xb1, 0xec, 0xde, 0x38, 0xe2, 0x31, 0xe6, 0x75, 0x40, 0xb6,
+	0xb1, 0x9c, 0x30, 0x64, 0xc2, 0x11, 0x3e, 0x0b, 0x79, 0xf2, 0x9d, 0x71, 0x76, 0xf3, 0x1c, 0x37,
+	0x7d, 0x26, 0xdf, 0x06, 0x8e, 0xbb, 0xe1, 0x87, 0x10, 0x6f, 0x59, 0xa9, 0x04, 0xb7, 0x02, 0x10,
+	0x8e, 0xd5, 0x5b, 0xb2, 0x3c, 0x08, 0x21, 0x76, 0x04, 0xb4, 0xd3, 0x56, 0x97, 0x3c, 0x5f, 0x6c,
+	0x74, 0xd7, 0x4d, 0x97, 0x05, 0x96, 0x13, 0x7b, 0x2c, 0x8a, 0xd9, 0x0d, 0x75, 0x91, 0x37, 0xd5,
+	0x60, 0xbd, 0x25, 0xa7, 0x13, 0x6d, 0x38, 0xfd, 0x9d, 0xd0, 0x5c, 0xda, 0x72, 0x59, 0x0c, 0x03,
+	0x84, 0xe8, 0x1f, 0x0d, 0xfc, 0xe8, 0x5b, 0x69, 0x4f, 0x97, 0x62, 0x70, 0x04, 0xd8, 0xf0, 0x4e,
+	0x17, 0xb8, 0x20, 0x47, 0xf0, 0x78, 0xe8, 0x04, 0xc0, 0x23, 0xc7, 0x85, 0x26, 0x9a, 0x45, 0x73,
+	0xe3, 0x76, 0xfe, 0x80, 0x5c, 0xc3, 0xda, 0x80, 0x66, 0x63, 0x16, 0xcd, 0x4d, 0x2c, 0x9f, 0x37,
+	0x73, 0x66, 0x33, 0x63, 0x56, 0x17, 0x66, 0xb4, 0xe9, 0x99, 0x92, 0xd9, 0xd4, 0x1e, 0x66, 0xcc,
+	0x66, 0xa6, 0x6d, 0xeb, 0xee, 0x08, 0xc5, 0xd8, 0x0f, 0xb9, 0x70, 0x42, 0x17, 0x5e, 0x5e, 0x6d,
+	0x8e, 0x48, 0xe5, 0x8b, 0x8d, 0x26, 0xb2, 0x0b, 0x4f, 0x09, 0xc5, 0x93, 0x1c, 0xe2, 0x1e, 0xc4,
+	0xab, 0xf1, 0x96, 0xdd, 0x0d, 0x9b, 0x7b, 0x66, 0xd1, 0xdc, 0x98, 0x5d, 0x7a, 0x46, 0xae, 0xe1,
+	0x29, 0x57, 0x8d, 0xe8, 0xf5, 0x48, 0x4d, 0x48, 0x73, 0xaf, 0xe2, 0x5c, 0x31, 0x13, 0x5b, 0xcc,
+	0xe2, 0x8c, 0xe4, 0x88, 0x72, 0x46, 0xcc, 0xde, 0x92, 0x79, 0xa9, 0xd8, 0xd4, 0x2e, 0xf7, 0x44,
+	0x7f, 0x43, 0x98, 0x64, 0xe4, 0x57, 0x40, 0x64, 0x96, 0x11, 0xbc, 0x47, 0x3a, 0x94, 0xba, 0xa5,
+	0xae, 0xcb, 0x36, 0x36, 0xb6, 0xdb, 0x78, 0x15, 0x63, 0x0f, 0x44, 0x06, 0x38, 0xa2, 0x00, 0x17,
+	0xab, 0x01, 0x5e, 0xd1, 0xed, 0xec, 0x42, 0x1f, 0xe4, 0x30, 0x1e, 0xbd, 0xee, 0x43, 0xa7, 0xcd,
+	0x95, 0x27, 0xe3, 0x76, 0x7a, 0x47, 0xbf, 0x45, 0xf8, 0x91, 0x0c, 0x79, 0xcd, 0xe7, 0xa2, 0xda,
+	0x34, 0xb7, 0xf0, 0x44, 0xc7, 0xe7, 0x1a, 0x30, 0x99, 0xe9, 0xa5, 0x6a, 0x80, 0x6b, 0x79, 0x43,
+	0xbb, 0xd8, 0x4b, 0x01, 0x71, 0xa4, 0x84, 0xe8, 0xe1, 0xc7, 0xf4, 0x72, 0x00, 0xde, 0x5d, 0x0f,
+	0xfc, 0x1a, 0xce, 0x1a, 0x78, 0x2c, 0x80, 0x80, 0xf9, 0xef, 0x42, 0x5b, 0xc9, 0x8c, 0xd9, 0xfa,
+	0x9e, 0xfe, 0x88, 0xf0, 0xa1, 0x5c, 0x49, 0xc4, 0x5b, 0x3b, 0x97, 0x39, 0x83, 0x0f, 0xc6, 0xc0,
+	0x85, 0x13, 0x8b, 0x56, 0xd7, 0x75, 0x81, 0xf3, 0xeb, 0xdd, 0x4e, 0xaa, 0xd7, 0xff, 0x42, 0x7e,
+	0x1d, 0xb2, 0x36, 0xbc, 0x24, 0xc7, 0xdb, 0x82, 0x0e, 0xb8, 0x82, 0xc5, 0xe9, 0x3c, 0xf5, 0xbf,
+	0xa0, 0x37, 0xf3, 0xad, 0x29, 0xfd, 0x08, 0xa0, 0x16, 0x66, 0xbf, 0xf0, 0xc8, 0xfd, 0x84, 0xd7,
+	0x70, 0x33, 0x13, 0x7e, 0x03, 0xe2, 0xc0, 0x0f, 0x0b, 0x61, 0xe1, 0x3f, 0x6b, 0xd3, 0xcf, 0x0b,
+	0x2b, 0xaf, 0x25, 0x58, 0xf4, 0x3f, 0x8d, 0x82, 0x34, 0xf1, 0xbe, 0x00, 0x38, 0x77, 0x3c, 0x48,
+	0x2d, 0xce, 0x6e, 0xe9, 0x9d, 0xc2, 0xf6, 0x6d, 0xd5, 0xd9, 0xbe, 0xbb, 0x04, 0x44, 0x0e, 0xe1,
+	0xbd, 0xd1, 0x86, 0xc3, 0x41, 0x85, 0xa8, 0x71, 0x3b, 0xb9, 0x21, 0xf3, 0xf8, 0x00, 0xeb, 0x8a,
+	0xa8, 0x2b, 0xae, 0x3a, 0xb1, 0x13, 0x80, 0x80, 0x98, 0x37, 0x47, 0xd5, 0x07, 0x7d, 0xcf, 0xe9,
+	0x2b, 0xf8, 0xb0, 0x1e, 0x51, 0x97, 0x47, 0x10, 0xb6, 0x77, 0x3e, 0x61, 0x3f, 0x14, 0xec, 0x59,
+	0x63, 0xde, 0xce, 0xed, 0x69, 0xe2, 0x7d, 0x11, 0x6b, 0xbf, 0x26, 0x1b, 0x25, 0xa6, 0x64, 0xb7,
+	0xe4, 0x02, 0xc6, 0x1d, 0xe6, 0x65, 0x61, 0x65, 0x8f, 0x0a, 0x2b, 0xc7, 0x0b, 0x61, 0xc5, 0x94,
+	0xf9, 0x4a, 0x06, 0x91, 0xab, 0xac, 0xbd, 0xa6, 0x3f, 0xb4, 0x0b, 0x8d, 0xe4, 0x26, 0xd6, 0xdb,
+	0x63, 0x15, 0x3a, 0x50, 0x63, 0x89, 0xca, 0x54, 0xd1, 0x56, 0x5d, 0x94, 0x23, 0x71, 0xc5, 0x54,
+	0xb1, 0x5a, 0x6c, 0x6a, 0x97, 0x7b, 0xa2, 0xcd, 0x7c, 0x62, 0x32, 0x4a, 0x1e, 0xb1, 0x90, 0x03,
+	0xfd, 0x54, 0x0e, 0xc0, 0x11, 0xee, 0x46, 0xf6, 0x9e, 0x3f, 0xbc, 0x98, 0x4c, 0x3f, 0xc8, 0xa7,
+	0x5c, 0x31, 0x5d, 0xee, 0x41, 0xa8, 0x9c, 0x14, 0x5b, 0x91, 0x76, 0x52, 0x5e, 0x93, 0x37, 0xf1,
+	0x28, 0x5b, 0xbf, 0x01, 0xae, 0xd8, 0x9d, 0xbc, 0x9f, 0x76, 0x46, 0x3f, 0x96, 0x8b, 0x4e, 0x2b,
+	0x3f, 0x4c, 0x2b, 0x5e, 0xc0, 0x63, 0x6b, 0xcc, 0xbb, 0x1c, 0x8a, 0x78, 0x4b, 0xae, 0x60, 0x97,
+	0x85, 0x02, 0x42, 0x91, 0x8a, 0x67, 0xb7, 0xc5, 0xb5, 0xdd, 0x28, 0xad, 0x6d, 0xfa, 0x59, 0x29,
+	0xd3, 0x86, 0xe2, 0x61, 0x17, 0x54, 0xf4, 0x5e, 0x61, 0xa7, 0xb4, 0x4a, 0x69, 0x75, 0x38, 0x12,
+	0xc5, 0x93, 0x31, 0x70, 0xd6, 0x8d, 0x5d, 0x78, 0xd5, 0x0f, 0xdb, 0xe9, 0x38, 0x4b, 0xcf, 0x8a,
+	0xdf, 0x14, 0xf6, 0x79, 0xe9, 0x19, 0x01, 0x3c, 0x95, 0x64, 0xf3, 0xf2, 0x7e, 0x7f, 0x71, 0x47,
+	0xe3, 0x6b, 0x65, 0x3d, 0x71, 0xbb, 0xdc, 0xeb, 0xf2, 0x9f, 0x87, 0xf0, 0xfe, 0x3c, 0xaa, 0xc7,
+	0x3d, 0xdf, 0x05, 0xf2, 0x15, 0xc2, 0xd3, 0x49, 0x25, 0x97, 0xbd, 0x21, 0xc7, 0xf2, 0x4e, 0x07,
+	0x16, 0xbe, 0x46, 0x3d, 0xdf, 0xe9, 0xdc, 0x47, 0x7f, 0xdf, 0xfb, 0xa2, 0x41, 0xe9, 0x51, 0x55,
+	0x77, 0xf7, 0x96, 0x74, 0xa1, 0xce, 0xad, 0x5b, 0xda, 0xdb, 0xdb, 0xcf, 0xa3, 0x79, 0xf2, 0x25,
+	0xc2, 0x13, 0x57, 0x40, 0x68, 0xb2, 0x23, 0xfd, 0x64, 0x79, 0x71, 0x59, 0x17, 0xeb, 0x8c, 0xc2,
+	0x7a, 0x92, 0x3c, 0x31, 0x14, 0x2b, 0xb9, 0xbe, 0x2d, 0xd1, 0xa6, 0xe4, 0x06, 0xd1, 0xa1, 0x89,
+	0x1c, 0xed, 0x87, 0x2b, 0x94, 0x91, 0xc6, 0x85, 0x5a, 0x74, 0xb2, 0x27, 0x7a, 0x52, 0x11, 0x1e,
+	0x23, 0xc3, 0x8d, 0x23, 0xef, 0xe3, 0xe9, 0x72, 0xd4, 0x2c, 0xcd, 0xe8, 0xa0, 0x78, 0x6a, 0x0c,
+	0x30, 0x36, 0x0f, 0x35, 0xf4, 0xb4, 0xd2, 0x3d, 0x49, 0x4e, 0x6c, 0xd7, 0x5d, 0x00, 0x15, 0x8a,
+	0x8a, 0xea, 0x8b, 0x88, 0x70, 0x3c, 0x51, 0x88, 0x53, 0xa5, 0x49, 0xeb, 0x0b, 0x5f, 0xc6, 0xe3,
+	0x83, 0x72, 0x5a, 0x22, 0x7b, 0x4a, 0xc9, 0x9e, 0x20, 0xc7, 0x33, 0x59, 0x2e, 0x62, 0x70, 0x02,
+	0x6b, 0xa0, 0xe8, 0x87, 0x08, 0x4f, 0x27, 0xe9, 0x63, 0xd8, 0x3a, 0x2e, 0xa5, 0x41, 0x63, 0xf6,
+	0xfe, 0x1f, 0xa4, 0x19, 0x28, 0x5d, 0x13, 0xf3, 0xd5, 0xd6, 0xc4, 0x4f, 0x08, 0x4f, 0xa9, 0x6a,
+	0x59, 0x23, 0xcc, 0xf4, 0x2b, 0x14, 0xcb, 0xe9, 0xba, 0x4b, 0xf6, 0x69, 0x85, 0x67, 0x19, 0xf3,
+	0x55, 0xf0, 0xac, 0x58, 0x2a, 0xcb, 0x6d, 0xf5, 0x2b, 0xc2, 0x07, 0xb2, 0xf3, 0x83, 0x46, 0x3d,
+	0x3e, 0x08, 0xb5, 0x74, 0xc6, 0xa8, 0x4b, 0x7b, 0x4e, 0xd1, 0x2e, 0x1b, 0x0b, 0x15, 0x69, 0x13,
+	0x71, 0x09, 0xfc, 0x33, 0xc2, 0xd3, 0x49, 0x81, 0x3f, 0x6c, 0x72, 0x4b, 0x47, 0x80, 0xba, 0xb0,
+	0xcf, 0x28, 0xd8, 0x45, 0xe3, 0x74, 0x65, 0xd8, 0x00, 0x24, 0xea, 0x2f, 0x08, 0xef, 0x4f, 0xeb,
+	0x4b, 0xcd, 0x3a, 0x60, 0x9d, 0x95, 0x4b, 0xd0, 0xba, 0xb0, 0xcf, 0x2a, 0xd8, 0x25, 0xe3, 0x4c,
+	0x25, 0x58, 0x9e, 0x68, 0x4b, 0xda, 0xdf, 0x11, 0x3e, 0xa8, 0x0f, 0x30, 0x9a, 0x97, 0xf6, 0xf3,
+	0x6e, 0x3f, 0xe5, 0xd4, 0x25, 0x7e, 0x4e, 0x11, 0xaf, 0x18, 0x66, 0x25, 0x62, 0x91, 0xa9, 0x4b,
+	0xe6, 0xef, 0x11, 0x9e, 0x94, 0xa7, 0x24, 0x8d, 0x3b, 0x20, 0xf0, 0x16, 0x4e, 0x51, 0x75, 0x49,
+	0xcf, 0x2a, 0x52, 0xd3, 0x38, 0x55, 0xcd, 0x5b, 0xc1, 0x22, 0x09, 0xf9, 0x0d, 0xc2, 0x13, 0xad,
+	0xe1, 0x99, 0xab, 0xb5, 0x6b, 0x99, 0x6b, 0x45, 0x21, 0x2e, 0x18, 0x73, 0xd5, 0x10, 0x41, 0xed,
+	0xa9, 0xaf, 0x11, 0x9e, 0x94, 0xc5, 0xd7, 0x30, 0x1b, 0x0b, 0xc5, 0x59, 0x5d, 0xc6, 0x05, 0xc5,
+	0xf8, 0x14, 0xa5, 0xc3, 0x19, 0x3b, 0x7e, 0xa8, 0xe8, 0xde, 0xc3, 0xfb, 0x92, 0x83, 0x0d, 0x1f,
+	0x64, 0x5d, 0x7e, 0xe6, 0x32, 0x48, 0xfe, 0x36, 0xab, 0x49, 0xe9, 0x79, 0xa5, 0x75, 0x96, 0x2c,
+	0x57, 0xf2, 0xe3, 0x56, 0x5a, 0x96, 0xde, 0xb6, 0x3a, 0xcc, 0xfb, 0xa4, 0x81, 0x16, 0x11, 0x11,
+	0x78, 0xb2, 0x20, 0xb5, 0x13, 0x84, 0x45, 0x85, 0x30, 0x4f, 0xaa, 0x4d, 0x49, 0x87, 0x79, 0x8b,
+	0x88, 0x7c, 0x87, 0xf0, 0x74, 0xab, 0x1c, 0x94, 0x8f, 0x0d, 0x8a, 0x1c, 0xbb, 0x18, 0x92, 0x2d,
+	0x85, 0x79, 0x8a, 0x3e, 0x20, 0xbf, 0xe9, 0x48, 0x7c, 0xf1, 0xfc, 0x5f, 0x77, 0x67, 0xd0, 0x9d,
+	0xbb, 0x33, 0xe8, 0x9f, 0xbb, 0x33, 0xe8, 0x6d, 0xeb, 0x41, 0x3f, 0x61, 0xb7, 0xfd, 0x22, 0x5e,
+	0x1f, 0x55, 0xff, 0x54, 0x57, 0xfe, 0x0d, 0x00, 0x00, 0xff, 0xff, 0x99, 0x5f, 0x00, 0x1e, 0x43,
+	0x16, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -1226,6 +1370,7 @@ type WorkflowServiceClient interface {
 	GetWorkflow(ctx context.Context, in *WorkflowGetRequest, opts ...grpc.CallOption) (*v1alpha1.Workflow, error)
 	ListWorkflows(ctx context.Context, in *WorkflowListRequest, opts ...grpc.CallOption) (*v1alpha1.WorkflowList, error)
 	WatchWorkflows(ctx context.Context, in *WatchWorkflowsRequest, opts ...grpc.CallOption) (WorkflowService_WatchWorkflowsClient, error)
+	WatchEvents(ctx context.Context, in *WatchEventsRequest, opts ...grpc.CallOption) (WorkflowService_WatchEventsClient, error)
 	DeleteWorkflow(ctx context.Context, in *WorkflowDeleteRequest, opts ...grpc.CallOption) (*WorkflowDeleteResponse, error)
 	RetryWorkflow(ctx context.Context, in *WorkflowRetryRequest, opts ...grpc.CallOption) (*v1alpha1.Workflow, error)
 	ResubmitWorkflow(ctx context.Context, in *WorkflowResubmitRequest, opts ...grpc.CallOption) (*v1alpha1.Workflow, error)
@@ -1233,8 +1378,11 @@ type WorkflowServiceClient interface {
 	SuspendWorkflow(ctx context.Context, in *WorkflowSuspendRequest, opts ...grpc.CallOption) (*v1alpha1.Workflow, error)
 	TerminateWorkflow(ctx context.Context, in *WorkflowTerminateRequest, opts ...grpc.CallOption) (*v1alpha1.Workflow, error)
 	StopWorkflow(ctx context.Context, in *WorkflowStopRequest, opts ...grpc.CallOption) (*v1alpha1.Workflow, error)
+	SetWorkflow(ctx context.Context, in *WorkflowSetRequest, opts ...grpc.CallOption) (*v1alpha1.Workflow, error)
 	LintWorkflow(ctx context.Context, in *WorkflowLintRequest, opts ...grpc.CallOption) (*v1alpha1.Workflow, error)
+	// DEPRECATED: Cannot work via HTTP if podName is an empty string. Use WorkflowLogs.
 	PodLogs(ctx context.Context, in *WorkflowLogRequest, opts ...grpc.CallOption) (WorkflowService_PodLogsClient, error)
+	WorkflowLogs(ctx context.Context, in *WorkflowLogRequest, opts ...grpc.CallOption) (WorkflowService_WorkflowLogsClient, error)
 	SubmitWorkflow(ctx context.Context, in *WorkflowSubmitRequest, opts ...grpc.CallOption) (*v1alpha1.Workflow, error)
 }
 
@@ -1305,6 +1453,38 @@ func (x *workflowServiceWatchWorkflowsClient) Recv() (*WorkflowWatchEvent, error
 	return m, nil
 }
 
+func (c *workflowServiceClient) WatchEvents(ctx context.Context, in *WatchEventsRequest, opts ...grpc.CallOption) (WorkflowService_WatchEventsClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_WorkflowService_serviceDesc.Streams[1], "/workflow.WorkflowService/WatchEvents", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &workflowServiceWatchEventsClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type WorkflowService_WatchEventsClient interface {
+	Recv() (*v11.Event, error)
+	grpc.ClientStream
+}
+
+type workflowServiceWatchEventsClient struct {
+	grpc.ClientStream
+}
+
+func (x *workflowServiceWatchEventsClient) Recv() (*v11.Event, error) {
+	m := new(v11.Event)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *workflowServiceClient) DeleteWorkflow(ctx context.Context, in *WorkflowDeleteRequest, opts ...grpc.CallOption) (*WorkflowDeleteResponse, error) {
 	out := new(WorkflowDeleteResponse)
 	err := c.cc.Invoke(ctx, "/workflow.WorkflowService/DeleteWorkflow", in, out, opts...)
@@ -1368,6 +1548,15 @@ func (c *workflowServiceClient) StopWorkflow(ctx context.Context, in *WorkflowSt
 	return out, nil
 }
 
+func (c *workflowServiceClient) SetWorkflow(ctx context.Context, in *WorkflowSetRequest, opts ...grpc.CallOption) (*v1alpha1.Workflow, error) {
+	out := new(v1alpha1.Workflow)
+	err := c.cc.Invoke(ctx, "/workflow.WorkflowService/SetWorkflow", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *workflowServiceClient) LintWorkflow(ctx context.Context, in *WorkflowLintRequest, opts ...grpc.CallOption) (*v1alpha1.Workflow, error) {
 	out := new(v1alpha1.Workflow)
 	err := c.cc.Invoke(ctx, "/workflow.WorkflowService/LintWorkflow", in, out, opts...)
@@ -1377,8 +1566,9 @@ func (c *workflowServiceClient) LintWorkflow(ctx context.Context, in *WorkflowLi
 	return out, nil
 }
 
+// Deprecated: Do not use.
 func (c *workflowServiceClient) PodLogs(ctx context.Context, in *WorkflowLogRequest, opts ...grpc.CallOption) (WorkflowService_PodLogsClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_WorkflowService_serviceDesc.Streams[1], "/workflow.WorkflowService/PodLogs", opts...)
+	stream, err := c.cc.NewStream(ctx, &_WorkflowService_serviceDesc.Streams[2], "/workflow.WorkflowService/PodLogs", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1409,6 +1599,38 @@ func (x *workflowServicePodLogsClient) Recv() (*LogEntry, error) {
 	return m, nil
 }
 
+func (c *workflowServiceClient) WorkflowLogs(ctx context.Context, in *WorkflowLogRequest, opts ...grpc.CallOption) (WorkflowService_WorkflowLogsClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_WorkflowService_serviceDesc.Streams[3], "/workflow.WorkflowService/WorkflowLogs", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &workflowServiceWorkflowLogsClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type WorkflowService_WorkflowLogsClient interface {
+	Recv() (*LogEntry, error)
+	grpc.ClientStream
+}
+
+type workflowServiceWorkflowLogsClient struct {
+	grpc.ClientStream
+}
+
+func (x *workflowServiceWorkflowLogsClient) Recv() (*LogEntry, error) {
+	m := new(LogEntry)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *workflowServiceClient) SubmitWorkflow(ctx context.Context, in *WorkflowSubmitRequest, opts ...grpc.CallOption) (*v1alpha1.Workflow, error) {
 	out := new(v1alpha1.Workflow)
 	err := c.cc.Invoke(ctx, "/workflow.WorkflowService/SubmitWorkflow", in, out, opts...)
@@ -1424,6 +1646,7 @@ type WorkflowServiceServer interface {
 	GetWorkflow(context.Context, *WorkflowGetRequest) (*v1alpha1.Workflow, error)
 	ListWorkflows(context.Context, *WorkflowListRequest) (*v1alpha1.WorkflowList, error)
 	WatchWorkflows(*WatchWorkflowsRequest, WorkflowService_WatchWorkflowsServer) error
+	WatchEvents(*WatchEventsRequest, WorkflowService_WatchEventsServer) error
 	DeleteWorkflow(context.Context, *WorkflowDeleteRequest) (*WorkflowDeleteResponse, error)
 	RetryWorkflow(context.Context, *WorkflowRetryRequest) (*v1alpha1.Workflow, error)
 	ResubmitWorkflow(context.Context, *WorkflowResubmitRequest) (*v1alpha1.Workflow, error)
@@ -1431,8 +1654,11 @@ type WorkflowServiceServer interface {
 	SuspendWorkflow(context.Context, *WorkflowSuspendRequest) (*v1alpha1.Workflow, error)
 	TerminateWorkflow(context.Context, *WorkflowTerminateRequest) (*v1alpha1.Workflow, error)
 	StopWorkflow(context.Context, *WorkflowStopRequest) (*v1alpha1.Workflow, error)
+	SetWorkflow(context.Context, *WorkflowSetRequest) (*v1alpha1.Workflow, error)
 	LintWorkflow(context.Context, *WorkflowLintRequest) (*v1alpha1.Workflow, error)
+	// DEPRECATED: Cannot work via HTTP if podName is an empty string. Use WorkflowLogs.
 	PodLogs(*WorkflowLogRequest, WorkflowService_PodLogsServer) error
+	WorkflowLogs(*WorkflowLogRequest, WorkflowService_WorkflowLogsServer) error
 	SubmitWorkflow(context.Context, *WorkflowSubmitRequest) (*v1alpha1.Workflow, error)
 }
 
@@ -1451,6 +1677,9 @@ func (*UnimplementedWorkflowServiceServer) ListWorkflows(ctx context.Context, re
 }
 func (*UnimplementedWorkflowServiceServer) WatchWorkflows(req *WatchWorkflowsRequest, srv WorkflowService_WatchWorkflowsServer) error {
 	return status.Errorf(codes.Unimplemented, "method WatchWorkflows not implemented")
+}
+func (*UnimplementedWorkflowServiceServer) WatchEvents(req *WatchEventsRequest, srv WorkflowService_WatchEventsServer) error {
+	return status.Errorf(codes.Unimplemented, "method WatchEvents not implemented")
 }
 func (*UnimplementedWorkflowServiceServer) DeleteWorkflow(ctx context.Context, req *WorkflowDeleteRequest) (*WorkflowDeleteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteWorkflow not implemented")
@@ -1473,11 +1702,17 @@ func (*UnimplementedWorkflowServiceServer) TerminateWorkflow(ctx context.Context
 func (*UnimplementedWorkflowServiceServer) StopWorkflow(ctx context.Context, req *WorkflowStopRequest) (*v1alpha1.Workflow, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StopWorkflow not implemented")
 }
+func (*UnimplementedWorkflowServiceServer) SetWorkflow(ctx context.Context, req *WorkflowSetRequest) (*v1alpha1.Workflow, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetWorkflow not implemented")
+}
 func (*UnimplementedWorkflowServiceServer) LintWorkflow(ctx context.Context, req *WorkflowLintRequest) (*v1alpha1.Workflow, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method LintWorkflow not implemented")
 }
 func (*UnimplementedWorkflowServiceServer) PodLogs(req *WorkflowLogRequest, srv WorkflowService_PodLogsServer) error {
 	return status.Errorf(codes.Unimplemented, "method PodLogs not implemented")
+}
+func (*UnimplementedWorkflowServiceServer) WorkflowLogs(req *WorkflowLogRequest, srv WorkflowService_WorkflowLogsServer) error {
+	return status.Errorf(codes.Unimplemented, "method WorkflowLogs not implemented")
 }
 func (*UnimplementedWorkflowServiceServer) SubmitWorkflow(ctx context.Context, req *WorkflowSubmitRequest) (*v1alpha1.Workflow, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SubmitWorkflow not implemented")
@@ -1559,6 +1794,27 @@ type workflowServiceWatchWorkflowsServer struct {
 }
 
 func (x *workflowServiceWatchWorkflowsServer) Send(m *WorkflowWatchEvent) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _WorkflowService_WatchEvents_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(WatchEventsRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(WorkflowServiceServer).WatchEvents(m, &workflowServiceWatchEventsServer{stream})
+}
+
+type WorkflowService_WatchEventsServer interface {
+	Send(*v11.Event) error
+	grpc.ServerStream
+}
+
+type workflowServiceWatchEventsServer struct {
+	grpc.ServerStream
+}
+
+func (x *workflowServiceWatchEventsServer) Send(m *v11.Event) error {
 	return x.ServerStream.SendMsg(m)
 }
 
@@ -1688,6 +1944,24 @@ func _WorkflowService_StopWorkflow_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _WorkflowService_SetWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WorkflowSetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkflowServiceServer).SetWorkflow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/workflow.WorkflowService/SetWorkflow",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkflowServiceServer).SetWorkflow(ctx, req.(*WorkflowSetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _WorkflowService_LintWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(WorkflowLintRequest)
 	if err := dec(in); err != nil {
@@ -1724,6 +1998,27 @@ type workflowServicePodLogsServer struct {
 }
 
 func (x *workflowServicePodLogsServer) Send(m *LogEntry) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _WorkflowService_WorkflowLogs_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(WorkflowLogRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(WorkflowServiceServer).WorkflowLogs(m, &workflowServiceWorkflowLogsServer{stream})
+}
+
+type WorkflowService_WorkflowLogsServer interface {
+	Send(*LogEntry) error
+	grpc.ServerStream
+}
+
+type workflowServiceWorkflowLogsServer struct {
+	grpc.ServerStream
+}
+
+func (x *workflowServiceWorkflowLogsServer) Send(m *LogEntry) error {
 	return x.ServerStream.SendMsg(m)
 }
 
@@ -1790,6 +2085,10 @@ var _WorkflowService_serviceDesc = grpc.ServiceDesc{
 			Handler:    _WorkflowService_StopWorkflow_Handler,
 		},
 		{
+			MethodName: "SetWorkflow",
+			Handler:    _WorkflowService_SetWorkflow_Handler,
+		},
+		{
 			MethodName: "LintWorkflow",
 			Handler:    _WorkflowService_LintWorkflow_Handler,
 		},
@@ -1805,8 +2104,18 @@ var _WorkflowService_serviceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 		{
+			StreamName:    "WatchEvents",
+			Handler:       _WorkflowService_WatchEvents_Handler,
+			ServerStreams: true,
+		},
+		{
 			StreamName:    "PodLogs",
 			Handler:       _WorkflowService_PodLogs_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "WorkflowLogs",
+			Handler:       _WorkflowService_WorkflowLogs_Handler,
 			ServerStreams: true,
 		},
 	},
@@ -2083,9 +2392,9 @@ func (m *WorkflowRetryRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x22
 	}
-	if m.RestartSuccesful {
+	if m.RestartSuccessful {
 		i--
-		if m.RestartSuccesful {
+		if m.RestartSuccessful {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -2222,6 +2531,75 @@ func (m *WorkflowStopRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	if m.XXX_unrecognized != nil {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.Message) > 0 {
+		i -= len(m.Message)
+		copy(dAtA[i:], m.Message)
+		i = encodeVarintWorkflow(dAtA, i, uint64(len(m.Message)))
+		i--
+		dAtA[i] = 0x22
+	}
+	if len(m.NodeFieldSelector) > 0 {
+		i -= len(m.NodeFieldSelector)
+		copy(dAtA[i:], m.NodeFieldSelector)
+		i = encodeVarintWorkflow(dAtA, i, uint64(len(m.NodeFieldSelector)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Namespace) > 0 {
+		i -= len(m.Namespace)
+		copy(dAtA[i:], m.Namespace)
+		i = encodeVarintWorkflow(dAtA, i, uint64(len(m.Namespace)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Name) > 0 {
+		i -= len(m.Name)
+		copy(dAtA[i:], m.Name)
+		i = encodeVarintWorkflow(dAtA, i, uint64(len(m.Name)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *WorkflowSetRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *WorkflowSetRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *WorkflowSetRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.OutputParameters) > 0 {
+		i -= len(m.OutputParameters)
+		copy(dAtA[i:], m.OutputParameters)
+		i = encodeVarintWorkflow(dAtA, i, uint64(len(m.OutputParameters)))
+		i--
+		dAtA[i] = 0x32
+	}
+	if len(m.Phase) > 0 {
+		i -= len(m.Phase)
+		copy(dAtA[i:], m.Phase)
+		i = encodeVarintWorkflow(dAtA, i, uint64(len(m.Phase)))
+		i--
+		dAtA[i] = 0x2a
 	}
 	if len(m.Message) > 0 {
 		i -= len(m.Message)
@@ -2527,6 +2905,52 @@ func (m *WorkflowWatchEvent) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
+func (m *WatchEventsRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *WatchEventsRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *WatchEventsRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.ListOptions != nil {
+		{
+			size, err := m.ListOptions.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintWorkflow(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Namespace) > 0 {
+		i -= len(m.Namespace)
+		copy(dAtA[i:], m.Namespace)
+		i = encodeVarintWorkflow(dAtA, i, uint64(len(m.Namespace)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
 func (m *LogEntry) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
@@ -2637,18 +3061,6 @@ func (m *WorkflowSubmitRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	if m.XXX_unrecognized != nil {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	if m.CreateOptions != nil {
-		{
-			size, err := m.CreateOptions.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintWorkflow(dAtA, i, uint64(size))
-		}
-		i--
-		dAtA[i] = 0x2a
 	}
 	if m.SubmitOptions != nil {
 		{
@@ -2817,7 +3229,7 @@ func (m *WorkflowRetryRequest) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovWorkflow(uint64(l))
 	}
-	if m.RestartSuccesful {
+	if m.RestartSuccessful {
 		n += 2
 	}
 	l = len(m.NodeFieldSelector)
@@ -2893,6 +3305,42 @@ func (m *WorkflowStopRequest) Size() (n int) {
 		n += 1 + l + sovWorkflow(uint64(l))
 	}
 	l = len(m.Message)
+	if l > 0 {
+		n += 1 + l + sovWorkflow(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *WorkflowSetRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Name)
+	if l > 0 {
+		n += 1 + l + sovWorkflow(uint64(l))
+	}
+	l = len(m.Namespace)
+	if l > 0 {
+		n += 1 + l + sovWorkflow(uint64(l))
+	}
+	l = len(m.NodeFieldSelector)
+	if l > 0 {
+		n += 1 + l + sovWorkflow(uint64(l))
+	}
+	l = len(m.Message)
+	if l > 0 {
+		n += 1 + l + sovWorkflow(uint64(l))
+	}
+	l = len(m.Phase)
+	if l > 0 {
+		n += 1 + l + sovWorkflow(uint64(l))
+	}
+	l = len(m.OutputParameters)
 	if l > 0 {
 		n += 1 + l + sovWorkflow(uint64(l))
 	}
@@ -3026,6 +3474,26 @@ func (m *WorkflowWatchEvent) Size() (n int) {
 	return n
 }
 
+func (m *WatchEventsRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Namespace)
+	if l > 0 {
+		n += 1 + l + sovWorkflow(uint64(l))
+	}
+	if m.ListOptions != nil {
+		l = m.ListOptions.Size()
+		n += 1 + l + sovWorkflow(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
 func (m *LogEntry) Size() (n int) {
 	if m == nil {
 		return 0
@@ -3086,10 +3554,6 @@ func (m *WorkflowSubmitRequest) Size() (n int) {
 	}
 	if m.SubmitOptions != nil {
 		l = m.SubmitOptions.Size()
-		n += 1 + l + sovWorkflow(uint64(l))
-	}
-	if m.CreateOptions != nil {
-		l = m.CreateOptions.Size()
 		n += 1 + l + sovWorkflow(uint64(l))
 	}
 	if m.XXX_unrecognized != nil {
@@ -3887,7 +4351,7 @@ func (m *WorkflowRetryRequest) Unmarshal(dAtA []byte) error {
 			iNdEx = postIndex
 		case 3:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field RestartSuccesful", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field RestartSuccessful", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -3904,7 +4368,7 @@ func (m *WorkflowRetryRequest) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
-			m.RestartSuccesful = bool(v != 0)
+			m.RestartSuccessful = bool(v != 0)
 		case 4:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field NodeFieldSelector", wireType)
@@ -4386,6 +4850,252 @@ func (m *WorkflowStopRequest) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Message = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipWorkflow(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthWorkflow
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthWorkflow
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *WorkflowSetRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowWorkflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: WorkflowSetRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: WorkflowSetRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowWorkflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthWorkflow
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthWorkflow
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Name = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Namespace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowWorkflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthWorkflow
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthWorkflow
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Namespace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeFieldSelector", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowWorkflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthWorkflow
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthWorkflow
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NodeFieldSelector = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Message", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowWorkflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthWorkflow
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthWorkflow
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Message = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Phase", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowWorkflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthWorkflow
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthWorkflow
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Phase = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field OutputParameters", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowWorkflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthWorkflow
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthWorkflow
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.OutputParameters = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -5168,6 +5878,128 @@ func (m *WorkflowWatchEvent) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
+func (m *WatchEventsRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowWorkflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: WatchEventsRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: WatchEventsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Namespace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowWorkflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthWorkflow
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthWorkflow
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Namespace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ListOptions", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowWorkflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthWorkflow
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthWorkflow
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.ListOptions == nil {
+				m.ListOptions = &v1.ListOptions{}
+			}
+			if err := m.ListOptions.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipWorkflow(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthWorkflow
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthWorkflow
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
 func (m *LogEntry) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -5566,42 +6398,6 @@ func (m *WorkflowSubmitRequest) Unmarshal(dAtA []byte) error {
 				m.SubmitOptions = &v1alpha1.SubmitOpts{}
 			}
 			if err := m.SubmitOptions.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
-		case 5:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field CreateOptions", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowWorkflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthWorkflow
-			}
-			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthWorkflow
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.CreateOptions == nil {
-				m.CreateOptions = &v1.CreateOptions{}
-			}
-			if err := m.CreateOptions.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

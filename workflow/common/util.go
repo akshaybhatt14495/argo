@@ -2,12 +2,14 @@ package common
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os/exec"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +21,7 @@ import (
 	apierr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
@@ -259,8 +262,7 @@ func ProcessArgs(tmpl *wfv1.Template, args wfv1.ArgumentsProvider, globalParams,
 		// overwrite value from argument (if supplied)
 		argParam := args.GetParameterByName(inParam.Name)
 		if argParam != nil && argParam.Value != nil {
-			newValue := *argParam.Value
-			inParam.Value = &newValue
+			inParam.Value = argParam.Value
 		}
 		if inParam.Value == nil {
 			return nil, errors.Errorf(errors.CodeBadRequest, "inputs.parameters.%s was not supplied", inParam.Name)
@@ -289,6 +291,7 @@ func ProcessArgs(tmpl *wfv1.Template, args wfv1.ArgumentsProvider, globalParams,
 		if argArt != nil {
 			argArt.Path = inArt.Path
 			argArt.Mode = inArt.Mode
+			argArt.RecurseMode = inArt.RecurseMode
 			newInputArtifacts[i] = *argArt
 		} else {
 			newInputArtifacts[i] = inArt
@@ -307,7 +310,10 @@ func SubstituteParams(tmpl *wfv1.Template, globalParams, localParams Parameters)
 	}
 	// First replace globals & locals, then replace inputs because globals could be referenced in the inputs
 	replaceMap := globalParams.Merge(localParams)
-	fstTmpl := fasttemplate.New(string(tmplBytes), "{{", "}}")
+	fstTmpl, err := fasttemplate.NewTemplate(string(tmplBytes), "{{", "}}")
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse argo varaible: %w", err)
+	}
 	globalReplacedTmplStr, err := Replace(fstTmpl, replaceMap, true)
 	if err != nil {
 		return nil, err
@@ -323,7 +329,7 @@ func SubstituteParams(tmpl *wfv1.Template, globalParams, localParams Parameters)
 		if inParam.Value == nil {
 			return nil, errors.InternalErrorf("inputs.parameters.%s had no value", inParam.Name)
 		}
-		replaceMap["inputs.parameters."+inParam.Name] = *inParam.Value
+		replaceMap["inputs.parameters."+inParam.Name] = inParam.Value.String()
 	}
 	//allow {{inputs.parameters}} to fetch the entire input parameters list as JSON
 	jsonInputParametersBytes, err := json.Marshal(globalReplacedTmpl.Inputs.Parameters)
@@ -347,7 +353,10 @@ func SubstituteParams(tmpl *wfv1.Template, globalParams, localParams Parameters)
 		}
 	}
 
-	fstTmpl = fasttemplate.New(globalReplacedTmplStr, "{{", "}}")
+	fstTmpl, err = fasttemplate.NewTemplate(globalReplacedTmplStr, "{{", "}}")
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse argo varaible: %w", err)
+	}
 	s, err := Replace(fstTmpl, replaceMap, true)
 	if err != nil {
 		return nil, err
@@ -366,8 +375,18 @@ func SubstituteParams(tmpl *wfv1.Template, globalParams, localParams Parameters)
 func Replace(fstTmpl *fasttemplate.Template, replaceMap map[string]string, allowUnresolved bool) (string, error) {
 	var unresolvedErr error
 	replacedTmpl := fstTmpl.ExecuteFuncString(func(w io.Writer, tag string) (int, error) {
-		replacement, ok := replaceMap[tag]
+		replacement, ok := replaceMap[strings.TrimSpace(tag)]
 		if !ok {
+			// Attempt to resolve nested tags, if possible
+			if index := strings.LastIndex(tag, "{{"); index > 0 {
+				nestedTagPrefix := tag[:index]
+				nestedTag := tag[index+2:]
+				if replacement, ok := replaceMap[nestedTag]; ok {
+					replacement = strconv.Quote(replacement)
+					replacement = replacement[1 : len(replacement)-1]
+					return w.Write([]byte("{{" + nestedTagPrefix + replacement))
+				}
+			}
 			if allowUnresolved {
 				// just write the same string back
 				return w.Write([]byte(fmt.Sprintf("{{%s}}", tag)))
@@ -388,36 +407,68 @@ func Replace(fstTmpl *fasttemplate.Template, replaceMap map[string]string, allow
 }
 
 // RunCommand is a convenience function to run/log a command and log the stderr upon failure
-func RunCommand(name string, arg ...string) error {
+func RunCommand(name string, arg ...string) ([]byte, error) {
 	cmd := exec.Command(name, arg...)
 	cmdStr := strings.Join(cmd.Args, " ")
 	log.Info(cmdStr)
-	_, err := cmd.Output()
+	out, err := cmd.Output()
 	if err != nil {
 		if exErr, ok := err.(*exec.ExitError); ok {
 			errOutput := string(exErr.Stderr)
 			log.Errorf("`%s` failed: %s", cmdStr, errOutput)
-			return errors.InternalError(strings.TrimSpace(errOutput))
+			return nil, errors.InternalError(strings.TrimSpace(errOutput))
 		}
-		return errors.InternalWrapError(err)
+		return nil, errors.InternalWrapError(err)
 	}
-	return nil
+	return out, nil
 }
 
-const patchRetries = 5
+// RunShellCommand is a convenience function to use RunCommand for shell executions. It's os-specific
+// and runs `cmd` in windows.
+func RunShellCommand(arg ...string) ([]byte, error) {
+	name := "sh"
+	shellFlag := "-c"
+	if runtime.GOOS == "windows" {
+		name = "cmd"
+		shellFlag = "/c"
+	}
+	arg = append([]string{shellFlag}, arg...)
+	return RunCommand(name, arg...)
+}
+
+// Run	Seconds
+// 0	0.000
+// 1	1.000
+// 2	2.000
+// 3	3.000
+// 4	4.000
+var defaultPatchBackoff = wait.Backoff{
+	Steps:    5,
+	Duration: 1 * time.Second,
+	Factor:   1,
+}
 
 // AddPodAnnotation adds an annotation to pod
-func AddPodAnnotation(c kubernetes.Interface, podName, namespace, key, value string) error {
-	return addPodMetadata(c, "annotations", podName, namespace, key, value)
+func AddPodAnnotation(ctx context.Context, c kubernetes.Interface, podName, namespace, key, value string, options ...interface{}) error {
+	backoff := defaultPatchBackoff
+	for _, option := range options {
+		switch v := option.(type) {
+		case wait.Backoff:
+			backoff = v
+		default:
+			panic("unknown option type")
+		}
+	}
+	return addPodMetadata(ctx, c, "annotations", podName, namespace, key, value, backoff)
 }
 
 // AddPodLabel adds an label to pod
-func AddPodLabel(c kubernetes.Interface, podName, namespace, key, value string) error {
-	return addPodMetadata(c, "labels", podName, namespace, key, value)
+func AddPodLabel(ctx context.Context, c kubernetes.Interface, podName, namespace, key, value string) error {
+	return addPodMetadata(ctx, c, "labels", podName, namespace, key, value, defaultPatchBackoff)
 }
 
 // addPodMetadata is helper to either add a pod label or annotation to the pod
-func addPodMetadata(c kubernetes.Interface, field, podName, namespace, key, value string) error {
+func addPodMetadata(ctx context.Context, c kubernetes.Interface, field, podName, namespace, key, value string, backoff wait.Backoff) error {
 	metadata := map[string]interface{}{
 		"metadata": map[string]interface{}{
 			field: map[string]string{
@@ -425,46 +476,29 @@ func addPodMetadata(c kubernetes.Interface, field, podName, namespace, key, valu
 			},
 		},
 	}
-	var err error
 	patch, err := json.Marshal(metadata)
 	if err != nil {
 		return errors.InternalWrapError(err)
 	}
-	for attempt := 0; attempt < patchRetries; attempt++ {
-		_, err = c.CoreV1().Pods(namespace).Patch(podName, types.MergePatchType, patch)
-		if err != nil {
-			if !apierr.IsConflict(err) {
-				return err
-			}
-		} else {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	return err
+	return wait.ExponentialBackoff(backoff, func() (bool, error) {
+		_, err = c.CoreV1().Pods(namespace).Patch(ctx, podName, types.MergePatchType, patch, metav1.PatchOptions{})
+		return err == nil, err
+	})
 }
 
 const deleteRetries = 3
 
 // DeletePod deletes a pod. Ignores NotFound error
-func DeletePod(c kubernetes.Interface, podName, namespace string) error {
+func DeletePod(ctx context.Context, c kubernetes.Interface, podName, namespace string) error {
 	var err error
 	for attempt := 0; attempt < deleteRetries; attempt++ {
-		err = c.CoreV1().Pods(namespace).Delete(podName, &metav1.DeleteOptions{})
+		err = c.CoreV1().Pods(namespace).Delete(ctx, podName, metav1.DeleteOptions{})
 		if err == nil || apierr.IsNotFound(err) {
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
 	return err
-}
-
-// IsPodTemplate returns whether the template corresponds to a pod
-func IsPodTemplate(tmpl *wfv1.Template) bool {
-	if tmpl.Container != nil || tmpl.Script != nil || tmpl.Resource != nil {
-		return true
-	}
-	return false
 }
 
 var yamlSeparator = regexp.MustCompile(`\n---`)
@@ -484,7 +518,11 @@ func SplitWorkflowYAMLFile(body []byte, strict bool) ([]wfv1.Workflow, error) {
 		}
 		err := yaml.Unmarshal([]byte(manifestStr), &wf, opts...)
 		if wf.Kind != "" && wf.Kind != workflow.WorkflowKind {
-			log.Warnf("%s is not a workflow", wf.Kind)
+			name := wf.Kind
+			if wf.Name != "" {
+				name = fmt.Sprintf("%s '%s'", name, wf.Name)
+			}
+			log.Warnf("%s is not of kind Workflow. Ignoring...", name)
 			// If we get here, it was a k8s manifest which was not of type 'Workflow'
 			// We ignore these since we only care about Workflow manifests.
 			continue
@@ -512,7 +550,11 @@ func SplitWorkflowTemplateYAMLFile(body []byte, strict bool) ([]wfv1.WorkflowTem
 		}
 		err := yaml.Unmarshal([]byte(manifestStr), &wftmpl, opts...)
 		if wftmpl.Kind != "" && wftmpl.Kind != workflow.WorkflowTemplateKind {
-			log.Warnf("%s is not a workflow template", wftmpl.Kind)
+			name := wftmpl.Kind
+			if wftmpl.Name != "" {
+				name = fmt.Sprintf("%s '%s'", name, wftmpl.Name)
+			}
+			log.Warnf("%s is not of kind WorkflowTemplate. Ignoring...", name)
 			// If we get here, it was a k8s manifest which was not of type 'WorkflowTemplate'
 			// We ignore these since we only care about WorkflowTemplate manifests.
 			continue
@@ -540,7 +582,11 @@ func SplitCronWorkflowYAMLFile(body []byte, strict bool) ([]wfv1.CronWorkflow, e
 		}
 		err := yaml.Unmarshal([]byte(manifestStr), &cronWf, opts...)
 		if cronWf.Kind != "" && cronWf.Kind != workflow.CronWorkflowKind {
-			log.Warnf("%s is not a cron workflow", cronWf.Kind)
+			name := cronWf.Kind
+			if cronWf.Name != "" {
+				name = fmt.Sprintf("%s '%s'", name, cronWf.Name)
+			}
+			log.Warnf("%s is not of kind CronWorkflow. Ignoring...", name)
 			// If we get here, it was a k8s manifest which was not of type 'CronWorkflow'
 			// We ignore these since we only care about CronWorkflow manifests.
 			continue
@@ -689,4 +735,8 @@ func SplitClusterWorkflowTemplateYAMLFile(body []byte, strict bool) ([]wfv1.Clus
 		manifests = append(manifests, cwftmpl)
 	}
 	return manifests, nil
+}
+
+func GenerateOnExitNodeName(parentDisplayName string) string {
+	return fmt.Sprintf("%s.onExit", parentDisplayName)
 }

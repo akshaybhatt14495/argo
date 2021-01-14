@@ -31,6 +31,7 @@ rules:
   verbs:
   - create
   - delete
+  - get
 - apiGroups:
   - argoproj.io
   resources:
@@ -80,6 +81,7 @@ rules:
   - events
   verbs:
   - create
+  - patch
 - apiGroups:
     - "policy"
   resources:

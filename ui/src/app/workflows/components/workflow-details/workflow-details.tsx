@@ -1,4 +1,4 @@
-import {AppContext, NotificationType, Page, SlidingPanel, TopBarFilter} from 'argo-ui';
+import {AppContext, NotificationType, Page, SlidingPanel} from 'argo-ui';
 import * as classNames from 'classnames';
 import * as PropTypes from 'prop-types';
 import * as React from 'react';
@@ -9,13 +9,18 @@ import {Link, NodePhase, Workflow} from '../../../../models';
 import {uiUrl} from '../../../shared/base';
 import {services} from '../../../shared/services';
 
-import {WorkflowArtifacts, WorkflowDag, WorkflowDagRenderOptions, WorkflowLogsViewer, WorkflowNodeInfo, WorkflowSummaryPanel, WorkflowTimeline, WorkflowYamlViewer} from '..';
+import {WorkflowArtifacts, WorkflowLogsViewer, WorkflowNodeInfo, WorkflowPanel, WorkflowSummaryPanel, WorkflowTimeline, WorkflowYamlViewer} from '..';
+import {CostOptimisationNudge} from '../../../shared/components/cost-optimisation-nudge';
+import {ErrorNotice} from '../../../shared/components/error-notice';
+import {Loading} from '../../../shared/components/loading';
+import {SecurityNudge} from '../../../shared/components/security-nudge';
 import {hasWarningConditionBadge} from '../../../shared/conditions-panel';
 import {Consumer, ContextApis} from '../../../shared/context';
-import {Utils} from '../../../shared/utils';
-import {WorkflowDagRenderOptionsPanel} from '../workflow-dag/workflow-dag-render-options-panel';
+import * as Operations from '../../../shared/workflow-operations-map';
+import {WorkflowOperationAction, WorkflowOperationName, WorkflowOperations} from '../../../shared/workflow-operations-map';
+import {EventsPanel} from '../events-panel';
 import {WorkflowParametersPanel} from '../workflow-parameters-panel';
-import {WorkflowYamlPanel} from './workflow-yaml-panel';
+import {WorkflowResourcePanel} from './workflow-resource-panel';
 
 require('./workflow-details.scss');
 
@@ -27,25 +32,10 @@ function parseSidePanelParam(param: string) {
     return null;
 }
 
-export const defaultNodesToDisplay = [
-    'phase:Pending',
-    'phase:Running',
-    'phase:Succeeded',
-    'phase:Skipped',
-    'phase:Failed',
-    'phase:Error',
-    'type:Pod',
-    'type:Steps',
-    'type:DAG',
-    'type:Retry',
-    'type:Skipped',
-    'type:Suspend'
-];
-
 interface WorkflowDetailsState {
-    workflowDagRenderOptions: WorkflowDagRenderOptions;
-    workflow: Workflow;
-    links: Link[];
+    workflow?: Workflow;
+    links?: Link[];
+    error?: Error;
 }
 
 export class WorkflowDetails extends React.Component<RouteComponentProps<any>, WorkflowDetailsState> {
@@ -71,11 +61,7 @@ export class WorkflowDetails extends React.Component<RouteComponentProps<any>, W
 
     constructor(props: RouteComponentProps<any>) {
         super(props);
-        this.state = {
-            workflowDagRenderOptions: {horizontal: false, zoom: 1, nodesToDisplay: defaultNodesToDisplay},
-            workflow: null,
-            links: null
-        };
+        this.state = {};
     }
 
     public componentDidMount() {
@@ -106,66 +92,33 @@ export class WorkflowDetails extends React.Component<RouteComponentProps<any>, W
     public render() {
         const selectedNode = this.state.workflow && this.state.workflow.status && this.state.workflow.status.nodes && this.state.workflow.status.nodes[this.selectedNodeId];
         const workflowPhase: NodePhase = this.state.workflow && this.state.workflow.status ? this.state.workflow.status.phase : undefined;
-        const filter: TopBarFilter<string> = {
-            items: [
-                {content: () => <span>Phase</span>},
-                {value: 'phase:Pending', label: 'Pending'},
-                {value: 'phase:Running', label: 'Running'},
-                {value: 'phase:Succeeded', label: 'Succeeded'},
-                {value: 'phase:Skipped', label: 'Skipped'},
-                {value: 'phase:Failed', label: 'Failed'},
-                {value: 'phase:Error', label: 'Error'},
-                {content: () => <span>Type</span>},
-                {value: 'type:Pod', label: 'Pod'},
-                {value: 'type:Steps', label: 'Steps'},
-                {value: 'type:DAG', label: 'DAG'},
-                {value: 'type:Retry', label: 'Retry'},
-                {value: 'type:Skipped', label: 'Skipped'},
-                {value: 'type:Suspend', label: 'Suspend'},
-                {value: 'type:TaskGroup', label: 'TaskGroup'},
-                {value: 'type:StepGroup', label: 'StepGroup'}
-            ],
-            selectedValues: this.state.workflowDagRenderOptions.nodesToDisplay,
-            selectionChanged: items => {
-                this.setState({
-                    workflowDagRenderOptions: {
-                        nodesToDisplay: items,
-                        horizontal: this.state.workflowDagRenderOptions.horizontal,
-                        zoom: this.state.workflowDagRenderOptions.zoom
-                    }
-                });
-            }
-        };
+
         return (
             <Consumer>
                 {ctx => (
                     <Page
                         title={'Workflow Details'}
                         toolbar={{
-                            filter,
                             breadcrumbs: [
                                 {
                                     title: 'Workflows',
                                     path: uiUrl('workflows')
                                 },
-                                {title: this.props.match.params.name}
+                                {title: this.props.match.params.namespace + '/' + this.props.match.params.name}
                             ],
                             actionMenu: {
                                 items: this.getItems(workflowPhase, ctx)
                             },
                             tools: (
                                 <div className='workflow-details__topbar-buttons'>
-                                    {this.selectedTabKey === 'workflow' && (
-                                        <WorkflowDagRenderOptionsPanel
-                                            {...this.state.workflowDagRenderOptions}
-                                            onChange={workflowDagRenderOptions => this.setState({workflowDagRenderOptions})}
-                                        />
-                                    )}
                                     <a className={classNames({active: this.selectedTabKey === 'summary'})} onClick={() => this.selectTab('summary')}>
                                         <i className='fa fa-columns' />
                                         {this.state.workflow && this.state.workflow.status.conditions && hasWarningConditionBadge(this.state.workflow.status.conditions) && (
                                             <span className='badge' />
                                         )}
+                                    </a>
+                                    <a className={classNames({active: this.selectedTabKey === 'events'})} onClick={() => this.selectTab('events')}>
+                                        <i className='fa argo-icon-notification' />
                                     </a>
                                     <a className={classNames({active: this.selectedTabKey === 'timeline'})} onClick={() => this.selectTab('timeline')}>
                                         <i className='fa argo-icon-timeline' />
@@ -177,25 +130,32 @@ export class WorkflowDetails extends React.Component<RouteComponentProps<any>, W
                             )
                         }}>
                         <div className={classNames('workflow-details', {'workflow-details--step-node-expanded': !!selectedNode})}>
-                            {(this.selectedTabKey === 'summary' && this.renderSummaryTab()) ||
-                                (this.state.workflow && (
+                            {this.state.error ? (
+                                <ErrorNotice error={this.state.error} onReload={() => this.reloadWorkflow()} reloadAfterSeconds={10} />
+                            ) : !this.state.workflow ? (
+                                <Loading />
+                            ) : (
+                                (this.selectedTabKey === 'summary' && this.renderSummaryTab()) || (
                                     <div>
                                         <div className='workflow-details__graph-container'>
                                             {(this.selectedTabKey === 'workflow' && (
-                                                <WorkflowDag
-                                                    renderOptions={this.state.workflowDagRenderOptions}
-                                                    workflow={this.state.workflow}
+                                                <WorkflowPanel
+                                                    workflowMetadata={this.state.workflow.metadata}
+                                                    workflowStatus={this.state.workflow.status}
                                                     selectedNodeId={this.selectedNodeId}
-                                                    nodeClicked={node => this.selectNode(node.id)}
+                                                    nodeClicked={nodeId => this.selectNode(nodeId)}
                                                 />
-                                            )) || (
-                                                <WorkflowTimeline
-                                                    workflow={this.state.workflow}
-                                                    selectedNodeId={this.selectedNodeId}
-                                                    nodeClicked={node => this.selectNode(node.id)}
-                                                    ref={timeline => (this.timelineComponent = timeline)}
-                                                />
-                                            )}
+                                            )) ||
+                                                (this.selectedTabKey === 'events' && (
+                                                    <EventsPanel namespace={this.state.workflow.metadata.namespace} kind='Workflow' name={this.state.workflow.metadata.name} />
+                                                )) || (
+                                                    <WorkflowTimeline
+                                                        workflow={this.state.workflow}
+                                                        selectedNodeId={this.selectedNodeId}
+                                                        nodeClicked={node => this.selectNode(node.id)}
+                                                        ref={timeline => (this.timelineComponent = timeline)}
+                                                    />
+                                                )}
                                         </div>
                                         <div className='workflow-details__step-info'>
                                             <button className='workflow-details__step-info-close' onClick={() => this.removeNodeSelection()}>
@@ -213,7 +173,8 @@ export class WorkflowDetails extends React.Component<RouteComponentProps<any>, W
                                             )}
                                         </div>
                                     </div>
-                                ))}
+                                )
+                            )}
                         </div>
                         {this.state.workflow && (
                             <SlidingPanel isShown={this.selectedNodeId && !!this.sidePanel} onClose={() => this.closeSidePanel()}>
@@ -229,49 +190,38 @@ export class WorkflowDetails extends React.Component<RouteComponentProps<any>, W
         );
     }
 
-    private getItems(workflowPhase: 'Pending' | 'Running' | 'Succeeded' | 'Skipped' | 'Failed' | 'Error', ctx: any) {
-        const items = [
-            {
-                title: 'Retry',
-                iconClassName: 'fa fa-undo',
-                disabled: workflowPhase === undefined || !(workflowPhase === 'Failed' || workflowPhase === 'Error'),
-                action: () => this.retryWorkflow(ctx)
-            },
-            {
-                title: 'Resubmit',
-                iconClassName: 'fa fa-plus-circle ',
-                action: () => this.resubmitWorkflow(ctx)
-            },
-            {
-                title: 'Suspend',
-                iconClassName: 'fa fa-pause',
-                disabled: !Utils.isWorkflowRunning(this.state.workflow) || Utils.isWorkflowSuspended(this.state.workflow),
-                action: () => this.suspendWorkflow(ctx)
-            },
-            {
-                title: 'Resume',
-                iconClassName: 'fa fa-play',
-                disabled: !Utils.isWorkflowSuspended(this.state.workflow),
-                action: () => this.resumeWorkflow(ctx)
-            },
-            {
-                title: 'Stop',
-                iconClassName: 'fa fa-stop-circle',
-                disabled: !Utils.isWorkflowRunning(this.state.workflow),
-                action: () => this.stopWorkflow(ctx)
-            },
-            {
-                title: 'Terminate',
-                iconClassName: 'fa fa-times-circle',
-                disabled: !Utils.isWorkflowRunning(this.state.workflow),
-                action: () => this.terminateWorkflow(ctx)
-            },
-            {
-                title: 'Delete',
-                iconClassName: 'fa fa-trash',
-                action: () => this.deleteWorkflow(ctx)
-            }
-        ];
+    private performAction(action: WorkflowOperationAction, title: WorkflowOperationName, ctx: ContextApis): void {
+        if (!confirm(`Are you sure you want to ${title.toLowerCase()} this workflow?`)) {
+            return;
+        }
+        action(this.state.workflow)
+            .then(wf => {
+                if (title === 'DELETE') {
+                    ctx.navigation.goto(uiUrl(``));
+                } else {
+                    ctx.navigation.goto(uiUrl(`workflows/${wf.metadata.namespace}/${wf.metadata.name}`));
+                }
+            })
+            .catch(() => {
+                this.appContext.apis.notifications.show({
+                    content: `Unable to ${title} workflow`,
+                    type: NotificationType.Error
+                });
+            });
+    }
+
+    private getItems(workflowPhase: NodePhase, ctx: any) {
+        const workflowOperationsMap: WorkflowOperations = Operations.WorkflowOperationsMap;
+        const items = Object.keys(workflowOperationsMap).map(actionName => {
+            const workflowOperation = workflowOperationsMap[actionName];
+            return {
+                title: workflowOperation.title.charAt(0).toUpperCase() + workflowOperation.title.slice(1),
+                iconClassName: workflowOperation.iconClassName,
+                disabled: workflowOperation.disabled(this.state.workflow),
+                action: () => this.performAction(workflowOperation.action, workflowOperation.title, ctx)
+            };
+        });
+
         if (this.state.links) {
             this.state.links
                 .filter(link => link.scope === 'workflow')
@@ -279,107 +229,12 @@ export class WorkflowDetails extends React.Component<RouteComponentProps<any>, W
                     items.push({
                         title: link.name,
                         iconClassName: 'fa fa-link',
+                        disabled: false,
                         action: () => this.openLink(link)
                     });
                 });
         }
         return items;
-    }
-
-    private deleteWorkflow(ctx: ContextApis) {
-        if (!confirm('Are you sure you want to delete this workflow?\nThere is no undo.')) {
-            return;
-        }
-        services.workflows
-            .delete(this.props.match.params.name, this.props.match.params.namespace)
-            .then(() => ctx.navigation.goto(uiUrl(`workflows/`)))
-            .catch(() => {
-                this.appContext.apis.notifications.show({
-                    content: 'Unable to delete workflow',
-                    type: NotificationType.Error
-                });
-            });
-    }
-
-    private stopWorkflow(ctx: ContextApis) {
-        if (!confirm('Are you sure you want to stop this workflow?')) {
-            return;
-        }
-        services.workflows
-            .stop(this.props.match.params.name, this.props.match.params.namespace)
-            .then(wf => ctx.navigation.goto(uiUrl(`workflows/${wf.metadata.namespace}/${wf.metadata.name}`)))
-            .catch(() => {
-                this.appContext.apis.notifications.show({
-                    content: 'Unable to terminate workflow',
-                    type: NotificationType.Error
-                });
-            });
-    }
-
-    private terminateWorkflow(ctx: ContextApis) {
-        if (!confirm('Are you sure you want to terminate this workflow?')) {
-            return;
-        }
-        services.workflows
-            .terminate(this.props.match.params.name, this.props.match.params.namespace)
-            .then(wf => ctx.navigation.goto(uiUrl(`workflows/${wf.metadata.namespace}/${wf.metadata.name}`)))
-            .catch(() => {
-                this.appContext.apis.notifications.show({
-                    content: 'Unable to terminate workflow',
-                    type: NotificationType.Error
-                });
-            });
-    }
-
-    private resumeWorkflow(ctx: ContextApis) {
-        services.workflows
-            .resume(this.props.match.params.name, this.props.match.params.namespace)
-            .then(wf => ctx.navigation.goto(uiUrl(`workflows/${wf.metadata.namespace}/${wf.metadata.name}`)))
-            .catch(() => {
-                this.appContext.apis.notifications.show({
-                    content: 'Unable to resume workflow',
-                    type: NotificationType.Error
-                });
-            });
-    }
-
-    private suspendWorkflow(ctx: ContextApis) {
-        services.workflows
-            .suspend(this.props.match.params.name, this.props.match.params.namespace)
-            .then(wf => ctx.navigation.goto(uiUrl(`workflows/${wf.metadata.namespace}/${wf.metadata.name}`)))
-            .catch(() => {
-                this.appContext.apis.notifications.show({
-                    content: 'Unable to suspend workflow',
-                    type: NotificationType.Error
-                });
-            });
-    }
-
-    private resubmitWorkflow(ctx: ContextApis) {
-        if (!confirm('Are you sure you want to re-submit this workflow?')) {
-            return;
-        }
-        services.workflows
-            .resubmit(this.props.match.params.name, this.props.match.params.namespace)
-            .then(wf => ctx.navigation.goto(uiUrl(`workflows/${wf.metadata.namespace}/${wf.metadata.name}`)))
-            .catch(() => {
-                this.appContext.apis.notifications.show({
-                    content: 'Unable to resubmit workflow',
-                    type: NotificationType.Error
-                });
-            });
-    }
-
-    private retryWorkflow(ctx: ContextApis) {
-        services.workflows
-            .retry(this.props.match.params.name, this.props.match.params.namespace)
-            .then(wf => ctx.navigation.goto(uiUrl(`workflows/${wf.metadata.namespace}/${wf.metadata.name}`)))
-            .catch(() => {
-                this.appContext.apis.notifications.show({
-                    content: 'Unable to retry workflow',
-                    type: NotificationType.Error
-                });
-            });
     }
 
     private openNodeYaml(nodeId: string) {
@@ -414,14 +269,40 @@ export class WorkflowDetails extends React.Component<RouteComponentProps<any>, W
         this.appContext.router.history.push(`${this.props.match.url}?${params.toString()}`);
     }
 
-    private renderSummaryTab() {
-        if (!this.state.workflow) {
-            return <div>Loading...</div>;
+    private renderSecurityNudge() {
+        if (!this.state.workflow.spec.securityContext) {
+            return <SecurityNudge>This workflow does not have security context set. It maybe possible to set this to run it more securely.</SecurityNudge>;
         }
+    }
+
+    private renderCostOptimisations() {
+        const recommendations: string[] = [];
+        if (!this.state.workflow.spec.activeDeadlineSeconds) {
+            recommendations.push('activeDeadlineSeconds');
+        }
+        if (!this.state.workflow.spec.ttlStrategy) {
+            recommendations.push('ttlStrategy');
+        }
+        if (!this.state.workflow.spec.podGC) {
+            recommendations.push('podGC');
+        }
+        if (recommendations.length === 0) {
+            return;
+        }
+        return (
+            <CostOptimisationNudge name='workflow'>
+                You do not have {recommendations.join('/')} enabled for this workflow. Enabling these will reduce your costs.
+            </CostOptimisationNudge>
+        );
+    }
+
+    private renderSummaryTab() {
         return (
             <div className='argo-container'>
                 <div className='workflow-details__content'>
                     <WorkflowSummaryPanel workflow={this.state.workflow} />
+                    {this.renderSecurityNudge()}
+                    {this.renderCostOptimisations()}
                     {this.state.workflow.spec.arguments && this.state.workflow.spec.arguments.parameters && (
                         <React.Fragment>
                             <h6>Parameters</h6>
@@ -430,7 +311,7 @@ export class WorkflowDetails extends React.Component<RouteComponentProps<any>, W
                     )}
                     <h6>Artifacts</h6>
                     <WorkflowArtifacts workflow={this.state.workflow} archived={false} />
-                    <WorkflowYamlPanel workflow={this.state.workflow} />
+                    <WorkflowResourcePanel workflow={this.state.workflow} />
                 </div>
             </div>
         );
@@ -443,23 +324,22 @@ export class WorkflowDetails extends React.Component<RouteComponentProps<any>, W
         this.changesSubscription = null;
     }
 
-    private async loadWorkflow(namespace: string, name: string) {
+    private reloadWorkflow() {
+        this.loadWorkflow(this.props.match.params.namespace, this.props.match.params.name);
+    }
+
+    private loadWorkflow(namespace: string, name: string) {
         try {
             this.ensureUnsubscribed();
             this.changesSubscription = services.workflows
-                .watch({name, namespace})
+                .watch({name, namespace, resourceVersion: '0'})
                 .map(changeEvent => changeEvent.object)
-                .catch((error, caught) => {
-                    return caught;
-                })
-                .subscribe(workflow => {
-                    this.setState({workflow});
-                });
-        } catch (e) {
-            this.appContext.apis.notifications.show({
-                content: 'Unable to load workflow',
-                type: NotificationType.Error
-            });
+                .subscribe(
+                    workflow => this.setState({workflow, error: null}),
+                    error => this.setState({error})
+                );
+        } catch (error) {
+            this.setState({error});
         }
     }
 
@@ -468,6 +348,15 @@ export class WorkflowDetails extends React.Component<RouteComponentProps<any>, W
     }
 
     private openLink(link: Link) {
-        document.location.href = link.url.replace('${metadata.namespace}', this.state.workflow.metadata.namespace).replace('${metadata.name}', this.state.workflow.metadata.name);
+        const url = link.url
+            .replace(/\${metadata\.namespace}/g, this.state.workflow.metadata.namespace)
+            .replace(/\${metadata\.name}/g, this.state.workflow.metadata.name)
+            .replace(/\${status\.startedAt}/g, this.state.workflow.status.startedAt)
+            .replace(/\${status\.finishedAt}/g, this.state.workflow.status.finishedAt);
+        if ((window.event as MouseEvent).ctrlKey) {
+            window.open(url, '_blank');
+        } else {
+            document.location.href = url;
+        }
     }
 }

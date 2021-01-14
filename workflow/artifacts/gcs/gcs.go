@@ -19,6 +19,7 @@ import (
 
 	"github.com/argoproj/pkg/file"
 
+	"github.com/argoproj/argo/errors"
 	wfv1 "github.com/argoproj/argo/pkg/apis/workflow/v1alpha1"
 )
 
@@ -65,13 +66,13 @@ func (g *ArtifactDriver) Load(inputArtifact *wfv1.Artifact, path string) error {
 			gcsClient, err := g.newGCSClient()
 			if err != nil {
 				log.Warnf("Failed to create new GCS client: %v", err)
-				return false, nil
+				return false, err
 			}
 			defer gcsClient.Close()
 			err = downloadObjects(gcsClient, inputArtifact.GCS.Bucket, inputArtifact.GCS.Key, path)
 			if err != nil {
 				log.Warnf("Failed to download objects from GCS: %v", err)
-				return false, nil
+				return false, err
 			}
 			return true, nil
 		})
@@ -87,7 +88,7 @@ func downloadObjects(client *storage.Client, bucket, key, path string) error {
 	for _, objName := range objNames {
 		err = downloadObject(client, bucket, key, objName, path)
 		if err != nil {
-			return fmt.Errorf("download object: %v", err)
+			return err
 		}
 	}
 	return nil
@@ -96,6 +97,10 @@ func downloadObjects(client *storage.Client, bucket, key, path string) error {
 // download an object from the bucket
 func downloadObject(client *storage.Client, bucket, key, objName, path string) error {
 	objPrefix := filepath.Clean(key)
+	if os.PathSeparator == '\\' {
+		objPrefix = strings.ReplaceAll(objPrefix, "\\", "/")
+	}
+
 	relObjPath := strings.TrimPrefix(objName, objPrefix)
 	localPath := filepath.Join(path, relObjPath)
 	objectDir, _ := filepath.Split(localPath)
@@ -107,6 +112,9 @@ func downloadObject(client *storage.Client, bucket, key, objName, path string) e
 	ctx := context.Background()
 	rc, err := client.Bucket(bucket).Object(objName).NewReader(ctx)
 	if err != nil {
+		if err == storage.ErrObjectNotExist {
+			return errors.New(errors.CodeNotFound, err.Error())
+		}
 		return fmt.Errorf("new bucket reader: %v", err)
 	}
 	defer rc.Close()
@@ -152,13 +160,12 @@ func (g *ArtifactDriver) Save(path string, outputArtifact *wfv1.Artifact) error 
 			log.Infof("GCS Save path: %s, key: %s", path, outputArtifact.GCS.Key)
 			client, err := g.newGCSClient()
 			if err != nil {
-				log.Warnf("Failed to create new GCS client: %v", err)
-				return false, nil
+				return false, err
 			}
 			defer client.Close()
 			err = uploadObjects(client, outputArtifact.GCS.Bucket, outputArtifact.GCS.Key, path)
 			if err != nil {
-				log.Warnf("Failed to upload objects: %v", err)
+				return false, err
 			}
 			return true, nil
 		})
@@ -176,7 +183,7 @@ func listFileRelPaths(path string, relPath string) ([]string, error) {
 	}
 	for _, file := range files {
 		if file.IsDir() {
-			fs, err := listFileRelPaths(path+file.Name()+"/", relPath+file.Name()+"/")
+			fs, err := listFileRelPaths(path+file.Name()+string(os.PathSeparator), relPath+file.Name()+string(os.PathSeparator))
 			if err != nil {
 				return nil, err
 			}
@@ -195,20 +202,29 @@ func uploadObjects(client *storage.Client, bucket, key, path string) error {
 		return fmt.Errorf("test if %s is a dir: %v", path, err)
 	}
 	if isDir {
-		dirName := filepath.Clean(path) + "/"
+		dirName := filepath.Clean(path) + string(os.PathSeparator)
 		keyPrefix := filepath.Clean(key) + "/"
 		fileRelPaths, err := listFileRelPaths(dirName, "")
 		if err != nil {
 			return err
 		}
 		for _, relPath := range fileRelPaths {
-			err = uploadObject(client, bucket, keyPrefix+relPath, dirName+relPath)
+			fullKey := keyPrefix + relPath
+			if os.PathSeparator == '\\' {
+				fullKey = strings.ReplaceAll(fullKey, "\\", "/")
+			}
+
+			err = uploadObject(client, bucket, fullKey, dirName+relPath)
 			if err != nil {
 				return fmt.Errorf("upload %s: %v", dirName+relPath, err)
 			}
 		}
 	} else {
-		err = uploadObject(client, bucket, filepath.Clean(key), path)
+		objectKey := filepath.Clean(key)
+		if os.PathSeparator == '\\' {
+			objectKey = strings.ReplaceAll(objectKey, "\\", "/")
+		}
+		err = uploadObject(client, bucket, objectKey, path)
 		if err != nil {
 			return fmt.Errorf("upload %s: %v", path, err)
 		}

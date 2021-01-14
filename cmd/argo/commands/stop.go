@@ -24,7 +24,14 @@ func NewStopCommand() *cobra.Command {
 
 	var command = &cobra.Command{
 		Use:   "stop WORKFLOW WORKFLOW2...",
-		Short: "stop zero or more workflows",
+		Short: "stop zero or more workflows allowing all exit handlers to run",
+		Example: `# Stop a workflow:
+
+  argo stop my-wf
+
+# Stop the latest workflow:
+  argo stop @latest
+`,
 		Run: func(cmd *cobra.Command, args []string) {
 
 			ctx, apiClient := client.NewAPIClient()
